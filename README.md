@@ -50,7 +50,7 @@ On first run, BlenderProc downloads Blender automatically (~500 MB). This is nor
 blenderproc run scripts/render_demo.py
 ```
 
-Uses `Scene_Morning.blend` and its built-in `Camera.001`. Tank is placed at `[0, 3, 0.2]` by default.
+Uses `Scene_Morning.blend` with a **top-down demo camera** (same framing as `--tank-only`). Tank is placed at `[0, 3, 0.2]` by default.
 
 ### 3. Tank-only preview (no environment)
 
@@ -82,8 +82,8 @@ Opens Blender with the script loaded. Press **Run BlenderProc** in the scripting
 ```bash
 blenderproc run scripts/render_demo.py -- \
   --tank-location 0 5 0.3 \
-  --no-use-scene-camera \
-  --camera-position 0 -13 1.5 \
+  --camera-offset 8 -8 9 \
+  --use-scene-camera \
   --resolution 1920 1080 \
   --output output/run_01
 ```
@@ -94,7 +94,7 @@ Edit the constants at the top of `scripts/render_demo.py` to change default tank
 
 **Environment (`Scene_Morning.blend`)**
 - Keep `HDRs/` and `Textures/` alongside the blend file so relative paths resolve
-- The scene camera is used by default; pass `--no-use-scene-camera` to aim manually
+- Default camera auto-frames the tank from above; pass `--use-scene-camera` for the blend's baked camera
 
 **Tank (War Thunder export)**
 - Default mesh: `ztz_99a_0.obj` with DDS textures in `textures/`
@@ -108,7 +108,7 @@ Edit the constants at the top of `scripts/render_demo.py` to change default tank
 | `Tank asset not found` | Check `assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj` exists |
 | Only `.hdf5`, no PNG | Run `python scripts/export_hdf5_image.py output/0.hdf5` |
 | Tank invisible / wrong size | Adjust `--tank-location` |
-| Wrong framing | Try `--no-use-scene-camera` with custom `--camera-position` |
+| Wrong framing | Adjust `--camera-offset` (default `10 -10 4`) or try `--use-scene-camera` |
 | Purple grass / missing textures | Ensure `Textures/` and `HDRs/` stay next to `Scene_Morning.blend` |
 | Flat / dark lighting | Script applies `spruit_sunrise_4k.hdr` automatically; try `--hdr-strength 2.0` |
 | Render looks grainy | Default is 128 samples + OPTIX denoise; try `--samples 256` |

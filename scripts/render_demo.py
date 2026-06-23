@@ -25,9 +25,8 @@ DEFAULT_RESOLUTION = [1920, 1080]
 DEFAULT_SCENE_CAMERA = "Camera"
 DEFAULT_SAMPLES = 128
 
-# Fallback camera when not using the scene's built-in camera
-DEFAULT_CAMERA_POSITION = [0.0, -13.0, 1.5]
-DEFAULT_CAMERA_ROTATION = [1.35, 0.0, 0.0]
+# Demo camera: offset from tank center of interest (same as tank-only preview — more top-down)
+DEFAULT_CAMERA_OFFSET = [10.0, -10.0, 4.0]
 
 TEXTURE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".dds", ".hdr", ".exr"}
 
@@ -200,21 +199,20 @@ def register_scene_camera(resolution, camera_name: str = DEFAULT_SCENE_CAMERA):
     print(f"Using scene camera: {cam_obj.name} ({width}x{height}, {cam_data.lens} mm)")
 
 
-def add_camera_for_tank(tank_objs, resolution, position=None, rotation=None):
-    """Frame the tank — auto-aim at its center when position/rotation not given."""
+def add_camera_for_tank(tank_objs, resolution, offset=None):
+    """Frame the tank from above — auto-aim at its center (hides ground-gap better)."""
     width, height = resolution
     bproc.camera.set_resolution(width, height)
 
-    if position is not None and rotation is not None:
-        cam_pose = bproc.math.build_transformation_mat(list(position), list(rotation))
-        bproc.camera.add_camera_pose(cam_pose)
-        return
+    if offset is None:
+        offset = DEFAULT_CAMERA_OFFSET
 
     poi = bproc.object.compute_poi(tank_objs)
-    cam_location = poi + np.array([10.0, -10.0, 4.0])
+    cam_location = poi + np.array(offset, dtype=float)
     rotation_matrix = bproc.camera.rotation_from_forward_vec(poi - cam_location)
     cam_pose = bproc.math.build_transformation_mat(cam_location, rotation_matrix)
     bproc.camera.add_camera_pose(cam_pose)
+    print(f"Using demo camera at [{cam_location[0]:.1f}, {cam_location[1]:.1f}, {cam_location[2]:.1f}] (offset {offset})")
 
 
 def parse_args():
@@ -265,20 +263,12 @@ def parse_args():
         help="Tank placement in world coordinates",
     )
     parser.add_argument(
-        "--camera-position",
+        "--camera-offset",
         type=float,
         nargs=3,
         metavar=("X", "Y", "Z"),
         default=None,
-        help="Camera world position (default: auto-frame tank in --tank-only mode)",
-    )
-    parser.add_argument(
-        "--camera-rotation",
-        type=float,
-        nargs=3,
-        metavar=("RX", "RY", "RZ"),
-        default=None,
-        help="Camera euler rotation in radians (default: auto-frame tank in --tank-only mode)",
+        help=f"Camera offset from tank center (default: {DEFAULT_CAMERA_OFFSET})",
     )
     parser.add_argument(
         "--resolution",
@@ -297,8 +287,8 @@ def parse_args():
     parser.add_argument(
         "--use-scene-camera",
         action=argparse.BooleanOptionalAction,
-        default=None,
-        help="Use the camera baked into the environment .blend (default: on for full scene)",
+        default=False,
+        help="Use the camera baked into the environment .blend (default: demo top-down framing)",
     )
     return parser.parse_args()
 
@@ -342,18 +332,13 @@ def main():
         obj.set_location(list(args.tank_location))
     print(f"Placed {len(tank_objs)} tank object(s) at {args.tank_location}")
 
-    from_scene = args.use_scene_camera
-    if from_scene is None:
-        from_scene = use_environment
-
-    if from_scene:
+    if args.use_scene_camera:
         register_scene_camera(resolution=args.resolution)
     else:
         add_camera_for_tank(
             tank_objs,
             args.resolution,
-            position=args.camera_position or DEFAULT_CAMERA_POSITION,
-            rotation=args.camera_rotation or DEFAULT_CAMERA_ROTATION,
+            offset=args.camera_offset,
         )
 
     width, height = args.resolution
