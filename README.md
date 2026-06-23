@@ -111,7 +111,8 @@ Edit the constants at the top of `scripts/render_demo.py` to change default tank
 | Wrong framing | Try `--no-use-scene-camera` with custom `--camera-position` |
 | Purple grass / missing textures | Ensure `Textures/` and `HDRs/` stay next to `Scene_Morning.blend` |
 | Flat / dark lighting | Script applies `spruit_sunrise_4k.hdr` automatically; try `--hdr-strength 2.0` |
-| Render takes forever | Scene has a 250-frame timeline; script resets to 1 frame + 32 samples |
+| Render looks grainy | Default is 128 samples + OPTIX denoise; try `--samples 256` |
+| Render takes forever | Scene has a 250-frame timeline; script resets to 1 frame |
 | First run is slow | BlenderProc is downloading Blender |
 
 ## License

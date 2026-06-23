@@ -20,6 +20,11 @@ DEFAULT_OUTPUT = PROJECT_ROOT / "output"
 # Tank on the open ground near the scene origin (Blender Z-up)
 DEFAULT_TANK_LOCATION = [0.0, 3.0, 0.2]
 
+# Match the authored framing in Scene_Morning.blend (1920x1080, 50 mm lens)
+DEFAULT_RESOLUTION = [1920, 1080]
+DEFAULT_SCENE_CAMERA = "Camera"
+DEFAULT_SAMPLES = 128
+
 # Fallback camera when not using the scene's built-in camera
 DEFAULT_CAMERA_POSITION = [0.0, -13.0, 1.5]
 DEFAULT_CAMERA_ROTATION = [1.35, 0.0, 0.0]
@@ -99,8 +104,8 @@ def relink_environment_textures(env_dir: Path) -> tuple[int, int]:
     return fixed, still_missing
 
 
-def configure_renderer(samples: int = 32) -> None:
-    """Apply BlenderProc Cycles settings suitable for classroom demo renders."""
+def configure_renderer(samples: int = DEFAULT_SAMPLES) -> None:
+    """Apply BlenderProc Cycles settings for clean, reasonably fast demo renders."""
     import bpy
     from blenderproc.python.renderer import RendererUtility
 
@@ -108,6 +113,8 @@ def configure_renderer(samples: int = 32) -> None:
     RendererUtility.set_render_devices()
     RendererUtility.render_init()
     RendererUtility.set_max_amount_of_samples(samples)
+    RendererUtility.set_noise_threshold(0.01)
+    RendererUtility.set_denoiser("OPTIX")
 
 
 def open_environment_blend(path: Path) -> None:
@@ -162,19 +169,35 @@ def save_png(path: Path, rgb: np.ndarray) -> None:
         Image.fromarray(rgb).save(path)
 
 
-def register_scene_camera(resolution):
-    """Register the active Blender camera (from the loaded .blend) for rendering."""
+def register_scene_camera(resolution, camera_name: str = DEFAULT_SCENE_CAMERA):
+    """Register the scene camera while preserving its authored lens and framing."""
     import bpy
+    from blenderproc.python.camera import CameraUtility
 
-    width, height = resolution
-    bproc.camera.set_resolution(width, height)
-
-    cam_obj = bpy.context.scene.camera
+    cam_obj = bpy.data.objects.get(camera_name)
+    if cam_obj is None or cam_obj.type != "CAMERA":
+        cam_obj = bpy.context.scene.camera
     if cam_obj is None:
-        raise RuntimeError("No active camera in the loaded environment.")
+        raise RuntimeError("No camera found in the loaded environment.")
+
+    bpy.context.scene.camera = cam_obj
+    cam_data = cam_obj.data
+    width, height = resolution
+
+    lens_value = cam_data.lens if cam_data.lens_unit == "MILLIMETERS" else cam_data.angle
+    CameraUtility.set_intrinsics_from_blender_params(
+        lens=lens_value,
+        image_width=width,
+        image_height=height,
+        clip_start=cam_data.clip_start,
+        clip_end=cam_data.clip_end,
+        shift_x=cam_data.shift_x,
+        shift_y=cam_data.shift_y,
+        lens_unit=cam_data.lens_unit,
+    )
 
     bproc.camera.add_camera_pose(cam_obj.matrix_world)
-    print(f"Using scene camera: {cam_obj.name}")
+    print(f"Using scene camera: {cam_obj.name} ({width}x{height}, {cam_data.lens} mm)")
 
 
 def add_camera_for_tank(tank_objs, resolution, position=None, rotation=None):
@@ -262,8 +285,14 @@ def parse_args():
         type=int,
         nargs=2,
         metavar=("WIDTH", "HEIGHT"),
-        default=[1280, 720],
-        help="Render resolution",
+        default=DEFAULT_RESOLUTION,
+        help=f"Render resolution (default: {DEFAULT_RESOLUTION[0]}x{DEFAULT_RESOLUTION[1]})",
+    )
+    parser.add_argument(
+        "--samples",
+        type=int,
+        default=DEFAULT_SAMPLES,
+        help=f"Cycles samples — higher = cleaner, slower (default: {DEFAULT_SAMPLES})",
     )
     parser.add_argument(
         "--use-scene-camera",
@@ -292,12 +321,12 @@ def main():
         )
 
     bproc.init()
-    if not use_environment:
-        configure_renderer()
+    configure_renderer(samples=args.samples)
 
     if use_environment:
         print(f"Opening environment: {args.environment}")
         open_environment_blend(args.environment)
+        configure_renderer(samples=args.samples)
 
         fixed, missing = relink_environment_textures(ENVIRONMENT_DIR)
         print(f"Relinked {fixed} environment texture(s); {missing} still missing (tree/leaf fallbacks applied where possible)")
