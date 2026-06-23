@@ -34,6 +34,9 @@ DEFAULT_SAMPLES = 128
 # Demo camera: offset from tank center of interest (same as tank-only preview — more top-down)
 DEFAULT_CAMERA_OFFSET = [10.0, -10.0, 4.0]
 
+# Rotate environment (deg Z) so authored scene framing faces the demo camera
+DEFAULT_ENVIRONMENT_ROTATION_Z = -45.9
+
 # YOLO: BlenderProc category_id on tank -> class 0 in labels/classes.txt
 TANK_CATEGORY_ID = 1
 
@@ -123,6 +126,43 @@ def configure_renderer(samples: int = DEFAULT_SAMPLES) -> None:
     RendererUtility.set_max_amount_of_samples(samples)
     RendererUtility.set_noise_threshold(0.01)
     RendererUtility.set_denoiser("OPTIX")
+
+
+def snapshot_environment_objects() -> set[str]:
+    """Record object names present after opening the environment (before tank import)."""
+    import bpy
+
+    return {obj.name for obj in bpy.data.objects if obj.type in {"MESH", "EMPTY", "LIGHT"}}
+
+
+def rotate_environment_objects(
+    object_names: set[str],
+    angle_deg: float,
+    pivot: list[float],
+) -> None:
+    """Rotate environment content around the tank pivot on the Z axis."""
+    import bpy
+    import mathutils
+
+    if abs(angle_deg) < 1e-6:
+        return
+
+    pivot_vec = mathutils.Vector(pivot)
+    angle_rad = np.radians(angle_deg)
+    rot = mathutils.Euler((0.0, 0.0, angle_rad), "XYZ").to_matrix().to_4x4()
+    to_pivot = mathutils.Matrix.Translation(-pivot_vec)
+    from_pivot = mathutils.Matrix.Translation(pivot_vec)
+    transform = from_pivot @ rot @ to_pivot
+
+    rotated = 0
+    for name in object_names:
+        obj = bpy.data.objects.get(name)
+        if obj is None:
+            continue
+        obj.matrix_world = transform @ obj.matrix_world
+        rotated += 1
+
+    print(f"Rotated {rotated} environment object(s) by {angle_deg:.1f}° around {pivot}")
 
 
 def open_environment_blend(path: Path) -> None:
@@ -319,6 +359,12 @@ def parse_args():
         default=True,
         help="Export YOLO detection labels (default: on)",
     )
+    parser.add_argument(
+        "--env-rotation",
+        type=float,
+        default=DEFAULT_ENVIRONMENT_ROTATION_Z,
+        help=f"Rotate environment on Z (degrees) around tank pivot (default: {DEFAULT_ENVIRONMENT_ROTATION_Z})",
+    )
     return parser.parse_args()
 
 
@@ -351,9 +397,11 @@ def main():
         print(f"Relinked {fixed} environment texture(s); {missing} still missing (tree/leaf fallbacks applied where possible)")
 
         apply_sky_lighting(args.hdr, strength=args.hdr_strength)
+        env_objects = snapshot_environment_objects()
     else:
         print("No environment — using studio ground plane (--tank-only)")
         setup_studio_scene()
+        env_objects = set()
 
     print(f"Loading tank: {args.tank}")
     tank_objs = load_mesh_asset(args.tank)
@@ -361,6 +409,13 @@ def main():
         obj.set_location(list(args.tank_location))
     label_tank_objects(tank_objs)
     print(f"Placed {len(tank_objs)} tank object(s) at {args.tank_location}")
+
+    if use_environment and env_objects:
+        rotate_environment_objects(
+            env_objects,
+            angle_deg=args.env_rotation,
+            pivot=list(args.tank_location),
+        )
 
     if args.use_scene_camera:
         register_scene_camera(resolution=args.resolution)

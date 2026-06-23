@@ -20,6 +20,10 @@ Bundled teaching assets live here so students get everything in one clone.
 
 **Default tank placement:** `[0, 3, 0.2]` on the open ground near the scene origin.
 
+**Environment rotation:** The blend was authored for its baked scene camera (south side). The demo
+uses a top-down camera from the southeast, so the script rotates all environment objects **-45.9°**
+around the tank pivot so the scene faces the demo camera as it did originally.
+
 ## Tank — ZTZ-99A (`objects/tank/cn_ztz_99a/`)
 
 | File | Purpose |
