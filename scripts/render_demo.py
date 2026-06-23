@@ -1,17 +1,12 @@
-"""
-Hands-on demo: render one image of a tank object inside a .blend environment.
+import blenderproc as bproc
 
-Run from the project root:
-    blenderproc run scripts/render_demo.py
-
-Optional overrides:
-    blenderproc run scripts/render_demo.py -- --output output/my_run
-"""
+# Hands-on demo: render one image of a tank object inside a .blend environment.
+# Run from project root:  blenderproc run scripts/render_demo.py
+# Optional overrides:     blenderproc run scripts/render_demo.py -- --output output/my_run
 
 import argparse
 from pathlib import Path
 
-import blenderproc as bproc
 import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
