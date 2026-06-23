@@ -1,0 +1,4 @@
+newmtl hatching
+	illum 3
+newmtl hatching_vcolor
+	illum 3

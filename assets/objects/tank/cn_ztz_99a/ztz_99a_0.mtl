@@ -1,0 +1,67 @@
+newmtl ztz_99a_body_ussr_camo_green
+	illum 3
+	map_Kd textures/ztz_99a_body_c.dds
+	map_bump textures/ztz_99a_body_n.dds
+newmtl headlight_glass
+	illum 3
+	map_Kd textures/headlight_glass_c.dds
+	map_bump textures/headlight_glass_n.dds
+newmtl headlight_glass
+	illum 3
+	map_Kd textures/headlight_glass_c.dds
+	map_bump textures/headlight_glass_n.dds
+newmtl ztz_99a_gun_ussr_camo_green
+	illum 3
+	map_Kd textures/ztz_99a_gun_c.dds
+	map_bump textures/ztz_99a_gun_n.dds
+newmtl smooth_barrel_a
+	illum 3
+	map_Kd textures/smooth_barrel_a_c.dds
+	map_bump textures/smooth_barrel_a_n.dds
+newmtl mg_pkt
+	illum 3
+	map_Kd textures/mg_pkt_c.dds
+	map_bump textures/mg_pkt_n.dds
+newmtl ztz_99a_turret_ussr_camo_green
+	illum 3
+	map_Kd textures/ztz_99a_turret_c.dds
+	map_bump textures/ztz_99a_turret_n.dds
+newmtl ztz_99a_mg_ussr_camo_green
+	illum 3
+	map_Kd textures/ztz_99a_mg_c.dds
+	map_bump textures/ztz_99a_mg_n.dds
+newmtl us_turret_glass
+	illum 3
+	map_Kd textures/us_turret_glass_c.dds
+newmtl mg_qjc88_ussr_camo_green
+	illum 3
+	map_Kd textures/mg_qjc88_c.dds
+	map_bump textures/mg_qjc88_n.dds
+newmtl mg_dshkm_ammo
+	illum 3
+	map_Kd textures/mg_dshkm_ammo_c.dds
+	map_bump textures/mg_dshkm_ammo_n.dds
+newmtl cn_ztz_99_phys_track_cn_ztz_99_phys_track
+	illum 3
+	map_Kd textures/cn_ztz_99_phys_track_c.dds
+	map_bump textures/cn_ztz_99_phys_track_n.dds
+newmtl cn_ztz_99a_track
+	illum 3
+	map_Kd textures/cn_ztz_99a_track_c.dds
+	map_bump textures/cn_ztz_99a_track_n.dds
+newmtl cn_ztz_99a_track
+	illum 3
+	map_Kd textures/cn_ztz_99a_track_c.dds
+	map_bump textures/cn_ztz_99a_track_n.dds
+newmtl ztz_99a_mg_ussr_camo_green
+	illum 3
+	map_Kd textures/ztz_99a_mg_c.dds
+	map_bump textures/ztz_99a_mg_n.dds
+newmtl ztz_99a_turret_ussr_camo_green
+	illum 3
+	map_Kd textures/ztz_99a_turret_c.dds
+	map_bump textures/ztz_99a_turret_n.dds
+newmtl ztz_99a_gun_ussr_camo_green
+	illum 3
+	map_Kd textures/ztz_99a_gun_c.dds
+	map_bump textures/ztz_99a_gun_n.dds

@@ -2,7 +2,7 @@ import blenderproc as bproc
 
 # Hands-on demo: render one image of a tank object inside a .blend environment.
 # Run from project root:  blenderproc run scripts/render_demo.py
-# Optional overrides:     blenderproc run scripts/render_demo.py -- --output output/my_run
+# Tank-only preview:      blenderproc run scripts/render_demo.py -- --tank-only
 
 import argparse
 from pathlib import Path
@@ -12,7 +12,7 @@ import numpy as np
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULT_ENVIRONMENT = PROJECT_ROOT / "assets" / "environment" / "scene.blend"
-DEFAULT_TANK = PROJECT_ROOT / "assets" / "objects" / "tank" / "tank.blend"
+DEFAULT_TANK = PROJECT_ROOT / "assets" / "objects" / "tank" / "cn_ztz_99a" / "ztz_99a_0.obj"
 DEFAULT_OUTPUT = PROJECT_ROOT / "output"
 
 # Camera pose: position [x, y, z], euler rotation [rx, ry, rz] in radians
@@ -42,17 +42,49 @@ def load_environment(path: Path):
     )
 
 
+def setup_studio_scene():
+    """Minimal ground + lighting when no environment .blend is available."""
+    ground = bproc.object.create_primitive("PLANE", size=40.0)
+    ground.set_location([0.0, 0.0, 0.0])
+
+    sun = bproc.types.Light()
+    sun.set_type("SUN")
+    sun.set_location([12.0, -8.0, 18.0])
+    sun.set_energy(4.0)
+
+    fill = bproc.types.Light()
+    fill.set_type("POINT")
+    fill.set_location([-6.0, 6.0, 8.0])
+    fill.set_energy(600.0)
+
+
 def save_png(path: Path, rgb: np.ndarray) -> None:
-    """Write an RGB uint8 array to PNG without extra dependencies."""
+    """Write an RGB uint8 array to PNG."""
     try:
         import imageio.v3 as iio
+
+        iio.imwrite(path, rgb)
     except ImportError:
         from PIL import Image
 
         Image.fromarray(rgb).save(path)
+
+
+def add_camera_for_tank(tank_objs, resolution, position=None, rotation=None):
+    """Frame the tank — auto-aim at its center when position/rotation not given."""
+    width, height = resolution
+    bproc.camera.set_resolution(width, height)
+
+    if position is not None and rotation is not None:
+        cam_pose = bproc.math.build_transformation_mat(list(position), list(rotation))
+        bproc.camera.add_camera_pose(cam_pose)
         return
 
-    iio.imwrite(path, rgb)
+    poi = bproc.object.compute_poi(tank_objs)
+    cam_location = poi + np.array([10.0, -10.0, 4.0])
+    rotation_matrix = bproc.camera.rotation_from_forward_vec(poi - cam_location)
+    cam_pose = bproc.math.build_transformation_mat(cam_location, rotation_matrix)
+    bproc.camera.add_camera_pose(cam_pose)
 
 
 def parse_args():
@@ -69,13 +101,18 @@ def parse_args():
         "--tank",
         type=Path,
         default=DEFAULT_TANK,
-        help=f"Path to tank asset .blend/.obj/.ply (default: {DEFAULT_TANK})",
+        help=f"Path to tank asset (default: {DEFAULT_TANK})",
     )
     parser.add_argument(
         "--output",
         type=Path,
         default=DEFAULT_OUTPUT,
         help=f"Output directory (default: {DEFAULT_OUTPUT})",
+    )
+    parser.add_argument(
+        "--tank-only",
+        action="store_true",
+        help="Skip environment; render tank on a simple studio ground plane",
     )
     parser.add_argument(
         "--tank-location",
@@ -90,16 +127,16 @@ def parse_args():
         type=float,
         nargs=3,
         metavar=("X", "Y", "Z"),
-        default=DEFAULT_CAMERA_POSITION,
-        help="Camera world position",
+        default=None,
+        help="Camera world position (default: auto-frame tank in --tank-only mode)",
     )
     parser.add_argument(
         "--camera-rotation",
         type=float,
         nargs=3,
         metavar=("RX", "RY", "RZ"),
-        default=DEFAULT_CAMERA_ROTATION,
-        help="Camera euler rotation in radians",
+        default=None,
+        help="Camera euler rotation in radians (default: auto-frame tank in --tank-only mode)",
     )
     parser.add_argument(
         "--resolution",
@@ -115,21 +152,28 @@ def parse_args():
 def main():
     args = parse_args()
 
-    if not args.environment.exists():
-        raise FileNotFoundError(
-            f"Environment not found: {args.environment}\n"
-            "Place your scene .blend at assets/environment/scene.blend"
-        )
     if not args.tank.exists():
         raise FileNotFoundError(
             f"Tank asset not found: {args.tank}\n"
-            "Place your tank model at assets/objects/tank/tank.blend (or .obj/.ply)"
+            "Expected bundled asset at assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj"
+        )
+
+    use_environment = not args.tank_only
+    if use_environment and not args.environment.exists():
+        raise FileNotFoundError(
+            f"Environment not found: {args.environment}\n"
+            "Place your scene .blend at assets/environment/scene.blend, "
+            "or run with --tank-only to preview the tank without an environment."
         )
 
     bproc.init()
 
-    print(f"Loading environment: {args.environment}")
-    load_environment(args.environment)
+    if use_environment:
+        print(f"Loading environment: {args.environment}")
+        load_environment(args.environment)
+    else:
+        print("No environment — using studio ground plane (--tank-only)")
+        setup_studio_scene()
 
     print(f"Loading tank: {args.tank}")
     tank_objs = load_mesh_asset(args.tank)
@@ -137,21 +181,20 @@ def main():
         obj.set_location(list(args.tank_location))
     print(f"Placed {len(tank_objs)} tank object(s) at {args.tank_location}")
 
-    # Supplemental light — skip if your environment already has adequate lighting
-    light = bproc.types.Light()
-    light.set_type("SUN")
-    light.set_location([10.0, -10.0, 15.0])
-    light.set_energy(3.0)
+    if use_environment:
+        light = bproc.types.Light()
+        light.set_type("SUN")
+        light.set_location([10.0, -10.0, 15.0])
+        light.set_energy(3.0)
+
+    add_camera_for_tank(
+        tank_objs,
+        args.resolution,
+        position=args.camera_position,
+        rotation=args.camera_rotation,
+    )
 
     width, height = args.resolution
-    bproc.camera.set_resolution(width, height)
-
-    cam_pose = bproc.math.build_transformation_mat(
-        list(args.camera_position),
-        list(args.camera_rotation),
-    )
-    bproc.camera.add_camera_pose(cam_pose)
-
     print(f"Rendering {width}x{height} ...")
     data = bproc.renderer.render()
 
@@ -161,7 +204,7 @@ def main():
     png_path = args.output / "render.png"
     save_png(png_path, data["colors"][0])
 
-    print(f"Done.")
+    print("Done.")
     print(f"  PNG:  {png_path}")
     print(f"  HDF5: {args.output / '0.hdf5'}")
 

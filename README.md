@@ -13,10 +13,12 @@ Students clone the repo, drop in the bundled test assets, and run one script.
 │   │   └── scene.blend          # your environment (required)
 │   └── objects/
 │       └── tank/
-│           └── tank.blend       # your tank model (required)
+│           └── cn_ztz_99a/      # bundled ZTZ-99A (War Thunder export)
+│               └── ztz_99a_0.obj
 ├── scripts/
-│   └── render_demo.py           # the demo pipeline
-├── output/                      # renders land here (gitignored)
+│   ├── render_demo.py           # the demo pipeline
+│   └── export_hdf5_image.py     # HDF5 → PNG/JPG (no Blender needed)
+├── output/                      # renders land here (see output/README.md)
 ├── requirements.txt
 └── README.md
 ```
@@ -40,29 +42,32 @@ pip install -r requirements.txt
 
 On first run, BlenderProc downloads Blender automatically (~500 MB). This is normal.
 
-### 2. Add the demo assets
+### 2. Render (tank-only preview — no environment needed yet)
 
-Place your files at these **fixed paths** (the script hard-links to them):
+The bundled ZTZ-99A tank is already at `assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj`.
 
-| Asset | Path | Format |
-|-------|------|--------|
-| Environment | `assets/environment/scene.blend` | `.blend` |
-| Tank | `assets/objects/tank/tank.blend` | `.blend`, `.obj`, or `.ply` |
+```bash
+blenderproc run scripts/render_demo.py -- --tank-only
+```
 
-If your tank export uses a different filename, either rename it to `tank.blend` or pass `--tank` (see below).
+### 3. Render with environment (when ready)
 
-### 3. Render one image
-
-From the project root:
+Add `assets/environment/scene.blend`, then:
 
 ```bash
 blenderproc run scripts/render_demo.py
 ```
 
-Outputs:
+Outputs (see `output/README.md` for details):
 
 - `output/render.png` — quick visual check
-- `output/0.hdf5` — full BlenderProc frame (view with `blenderproc vis hdf5 output/0.hdf5`)
+- `output/0.hdf5` — full BlenderProc frame
+
+**Export PNG from an existing HDF5** (e.g. after `blenderproc quickstart`):
+
+```bash
+python scripts/export_hdf5_image.py output/0.hdf5
+```
 
 ### 4. Debug in Blender GUI (optional)
 
@@ -102,8 +107,9 @@ Edit the constants at the top of `scripts/render_demo.py` to change default came
 
 | Problem | Fix |
 |---------|-----|
-| `Environment not found` | Add `assets/environment/scene.blend` |
-| `Tank asset not found` | Add model under `assets/objects/tank/` |
+| `Environment not found` | Add `assets/environment/scene.blend`, or use `--tank-only` |
+| `Tank asset not found` | Check `assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj` exists |
+| Only `.hdf5`, no PNG | Run `python scripts/export_hdf5_image.py output/0.hdf5` |
 | Tank invisible / wrong size | Adjust `--tank-location` and re-export with applied scale |
 | Dark render | Tune the SUN light in `render_demo.py` or add lights in `scene.blend` |
 | First run is slow | BlenderProc is downloading Blender |
