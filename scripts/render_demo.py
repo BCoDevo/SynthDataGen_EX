@@ -437,6 +437,11 @@ def main():
     png_path = args.output / "render.png"
     save_png(png_path, rgb)
 
+    images_dir = args.output / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+    yolo_image_path = images_dir / "render.png"
+    save_png(yolo_image_path, rgb)
+
     label_path = None
     if args.yolo:
         print("Rendering instance segmentation for YOLO labels ...")
@@ -446,11 +451,6 @@ def main():
         if isinstance(inst_segmap, list):
             inst_segmap = inst_segmap[0]
             inst_attrs = inst_attrs[0]
-
-        images_dir = args.output / "images"
-        images_dir.mkdir(parents=True, exist_ok=True)
-        yolo_image_path = images_dir / "render.png"
-        save_png(yolo_image_path, rgb)
 
         label_path = write_yolo_dataset(
             args.output,
@@ -467,7 +467,7 @@ def main():
     print(f"  HDF5: {args.output / '0.hdf5'}")
     if label_path is not None:
         print(f"  YOLO: {args.output / 'data.yaml'}")
-        print(f"        python scripts/visualize_yolo.py {args.output / 'images' / 'render.png'}")
+    print(f"        python scripts/visualize_yolo.py")
 
 
 if __name__ == "__main__":

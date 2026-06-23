@@ -62,13 +62,15 @@ Each label line is one detected tank:
 0 0.556250 0.548333 0.852500 0.710000
 ```
 
-Preview boxes on the image:
+Preview boxes on the image (does **not** re-render — annotates the PNG already on disk):
 
 ```bash
-python scripts/visualize_yolo.py output/images/render.png
+python scripts/visualize_yolo.py
 ```
 
-Writes `output/images/render_annotated.png`.
+Uses the newest of `render.png` / `images/render.png`. After scene changes, run
+`blenderproc run scripts/render_demo.py` first, then visualize. Writes `*_annotated.png`
+next to the source image.
 
 Train with Ultralytics (example):
 

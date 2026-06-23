@@ -67,10 +67,10 @@ Outputs (see `output/README.md` for details):
 - `output/labels/render.txt` — YOLO bbox labels (on by default)
 - `output/data.yaml` — YOLO dataset config
 
-Preview annotations:
+Preview annotations (run after `blenderproc run ...` — does not re-render):
 
 ```bash
-python scripts/visualize_yolo.py output/images/render.png
+python scripts/visualize_yolo.py
 ```
 
 **Export PNG from an existing HDF5** (e.g. after `blenderproc quickstart`):
