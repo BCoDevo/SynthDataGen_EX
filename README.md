@@ -2,7 +2,7 @@
 
 Minimal hands-on demo for generating a single synthetic image: one War Thunder tank placed in a Blender environment.
 
-Students clone the repo, drop in the bundled test assets, and run one script.
+Students clone the repo, pull bundled test assets, and run one script.
 
 ## Project layout
 
@@ -10,7 +10,9 @@ Students clone the repo, drop in the bundled test assets, and run one script.
 .
 ├── assets/
 │   ├── environment/
-│   │   └── scene.blend          # your environment (required)
+│   │   ├── Scene_Morning.blend  # bundled morning outdoor scene
+│   │   ├── HDRs/                # sky HDRIs
+│   │   └── Textures/            # PBR ground/material maps
 │   └── objects/
 │       └── tank/
 │           └── cn_ztz_99a/      # bundled ZTZ-99A (War Thunder export)
@@ -42,20 +44,18 @@ pip install -r requirements.txt
 
 On first run, BlenderProc downloads Blender automatically (~500 MB). This is normal.
 
-### 2. Render (tank-only preview — no environment needed yet)
-
-The bundled ZTZ-99A tank is already at `assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj`.
-
-```bash
-blenderproc run scripts/render_demo.py -- --tank-only
-```
-
-### 3. Render with environment (when ready)
-
-Add `assets/environment/scene.blend`, then:
+### 2. Render tank in environment (default)
 
 ```bash
 blenderproc run scripts/render_demo.py
+```
+
+Uses `Scene_Morning.blend` and its built-in `Camera.001`. Tank is placed at `[0, 3, 0.2]` by default.
+
+### 3. Tank-only preview (no environment)
+
+```bash
+blenderproc run scripts/render_demo.py -- --tank-only
 ```
 
 Outputs (see `output/README.md` for details):
@@ -79,39 +79,36 @@ Opens Blender with the script loaded. Press **Run BlenderProc** in the scripting
 
 ## Customization
 
-All defaults are overridable:
-
 ```bash
 blenderproc run scripts/render_demo.py -- \
-  --tank assets/objects/tank/my_panzer.obj \
-  --tank-location 2 0 0.1 \
-  --camera-position 10 -6 3 \
+  --tank-location 0 5 0.3 \
+  --no-use-scene-camera \
+  --camera-position 0 -13 1.5 \
   --resolution 1920 1080 \
   --output output/run_01
 ```
 
-Edit the constants at the top of `scripts/render_demo.py` to change default camera pose and tank placement for your scene.
+Edit the constants at the top of `scripts/render_demo.py` to change default tank placement and fallback camera.
 
 ## Asset prep tips
 
-**Environment (`scene.blend`)**
-- Save the full scene: ground, backdrop, lighting, etc.
-- Origin and scale should match where you want the tank placed (default tank position is `[0, 0, 0]`).
+**Environment (`Scene_Morning.blend`)**
+- Keep `HDRs/` and `Textures/` alongside the blend file so relative paths resolve
+- The scene camera is used by default; pass `--no-use-scene-camera` to aim manually
 
 **Tank (War Thunder export)**
-- Export as `.blend` (preferred), `.obj`, or `.ply`.
-- Apply scale in Blender before committing; tanks are often exported very large or very small.
-- Center the mesh at its origin in the tank file so placement is predictable.
+- Default mesh: `ztz_99a_0.obj` with DDS textures in `textures/`
+- Adjust `--tank-location` if the tank floats or clips into terrain
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---------|-----|
-| `Environment not found` | Add `assets/environment/scene.blend`, or use `--tank-only` |
+| `Environment not found` | Check `assets/environment/Scene_Morning.blend` exists |
 | `Tank asset not found` | Check `assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj` exists |
 | Only `.hdf5`, no PNG | Run `python scripts/export_hdf5_image.py output/0.hdf5` |
-| Tank invisible / wrong size | Adjust `--tank-location` and re-export with applied scale |
-| Dark render | Tune the SUN light in `render_demo.py` or add lights in `scene.blend` |
+| Tank invisible / wrong size | Adjust `--tank-location` |
+| Wrong framing | Try `--no-use-scene-camera` with custom `--camera-position` |
 | First run is slow | BlenderProc is downloading Blender |
 
 ## License

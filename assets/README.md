@@ -2,7 +2,22 @@
 
 Bundled teaching assets live here so students get everything in one clone.
 
-## Tank — ZTZ-99A (`cn_ztz_99a/`)
+## Environment — `Scene_Morning.blend`
+
+| Path | Purpose |
+|------|---------|
+| `Scene_Morning.blend` | **Default demo environment** — terrain, materials, baked camera |
+| `HDRs/*.hdr` | Sky lighting (`kloppenheim_02_2k`, `spruit_sunrise_4k`) |
+| `Textures/` | Polyhaven-style ground/plank PBR maps + grass PNG |
+
+**Audit (checked in):**
+- Blend loads 65 mesh objects + `Camera.001` at `[-0.26, -13.45, 1.32]`
+- HDR and texture paths are relative to this folder (~93 MB total)
+- Scene uses HDR/world lighting — no extra sun is added by the render script
+
+**Default tank placement:** `[0, 3, 0.2]` on the open ground near the scene origin.
+
+## Tank — ZTZ-99A (`objects/tank/cn_ztz_99a/`)
 
 | File | Purpose |
 |------|---------|
@@ -17,28 +32,11 @@ Bundled teaching assets live here so students get everything in one clone.
 - OBJ is ASCII format with relative `textures/` paths (loads correctly from its folder)
 - Folder size: ~320 MB (large DDS color maps; expect slower first load)
 
-**Notes for instructors:**
-- DDS textures load in Blender 4.x; if materials look flat, open the OBJ in Blender GUI once to verify node setup
-- `ussr_camo_green.dds` is present but not directly mapped in the MTL (camo is baked into the `_c.dds` maps)
-- AO maps (`*_ao.dds`) are included but not wired in the MTL — optional enhancement
-
-## Environment (not bundled yet)
-
-```
-environment/scene.blend     # full Blender environment — add when ready
-```
-
-Until then, students can preview the tank with:
-
-```bash
-blenderproc run scripts/render_demo.py -- --tank-only
-```
-
 ## Checklist before pushing
 
+- [x] Environment blend + HDR/texture support files present
 - [x] Tank OBJ + MTL + textures present and path-validated
-- [ ] Environment opens cleanly in Blender 4.x+
-- [ ] Combined scene looks correct when tank is at `[0, 0, 0]` (default)
+- [x] Combined scene renders with bundled camera (`Camera.001`)
 - [ ] License OK to redistribute War Thunder extracted assets for teaching
 
 ## Optional

@@ -11,16 +11,16 @@ import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-DEFAULT_ENVIRONMENT = PROJECT_ROOT / "assets" / "environment" / "scene.blend"
+DEFAULT_ENVIRONMENT = PROJECT_ROOT / "assets" / "environment" / "Scene_Morning.blend"
 DEFAULT_TANK = PROJECT_ROOT / "assets" / "objects" / "tank" / "cn_ztz_99a" / "ztz_99a_0.obj"
 DEFAULT_OUTPUT = PROJECT_ROOT / "output"
 
-# Camera pose: position [x, y, z], euler rotation [rx, ry, rz] in radians
-DEFAULT_CAMERA_POSITION = [8.0, -8.0, 4.0]
-DEFAULT_CAMERA_ROTATION = [1.1, 0.0, 0.85]
+# Tank on the open ground near the scene origin (Blender Z-up)
+DEFAULT_TANK_LOCATION = [0.0, 3.0, 0.2]
 
-# Where to place the tank in the environment (meters, Blender Z-up)
-DEFAULT_TANK_LOCATION = [0.0, 0.0, 0.0]
+# Fallback camera when not using the scene's built-in camera
+DEFAULT_CAMERA_POSITION = [0.0, -13.0, 1.5]
+DEFAULT_CAMERA_ROTATION = [1.35, 0.0, 0.0]
 
 
 def load_mesh_asset(path: Path):
@@ -68,6 +68,21 @@ def save_png(path: Path, rgb: np.ndarray) -> None:
         from PIL import Image
 
         Image.fromarray(rgb).save(path)
+
+
+def register_scene_camera(resolution):
+    """Register the active Blender camera (from the loaded .blend) for rendering."""
+    import bpy
+
+    width, height = resolution
+    bproc.camera.set_resolution(width, height)
+
+    cam_obj = bpy.context.scene.camera
+    if cam_obj is None:
+        raise RuntimeError("No active camera in the loaded environment.")
+
+    bproc.camera.add_camera_pose(cam_obj.matrix_world)
+    print(f"Using scene camera: {cam_obj.name}")
 
 
 def add_camera_for_tank(tank_objs, resolution, position=None, rotation=None):
@@ -146,6 +161,12 @@ def parse_args():
         default=[1280, 720],
         help="Render resolution",
     )
+    parser.add_argument(
+        "--use-scene-camera",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Use the camera baked into the environment .blend (default: on for full scene)",
+    )
     return parser.parse_args()
 
 
@@ -162,7 +183,7 @@ def main():
     if use_environment and not args.environment.exists():
         raise FileNotFoundError(
             f"Environment not found: {args.environment}\n"
-            "Place your scene .blend at assets/environment/scene.blend, "
+            "Expected bundled scene at assets/environment/Scene_Morning.blend, "
             "or run with --tank-only to preview the tank without an environment."
         )
 
@@ -181,18 +202,19 @@ def main():
         obj.set_location(list(args.tank_location))
     print(f"Placed {len(tank_objs)} tank object(s) at {args.tank_location}")
 
-    if use_environment:
-        light = bproc.types.Light()
-        light.set_type("SUN")
-        light.set_location([10.0, -10.0, 15.0])
-        light.set_energy(3.0)
+    from_scene = args.use_scene_camera
+    if from_scene is None:
+        from_scene = use_environment
 
-    add_camera_for_tank(
-        tank_objs,
-        args.resolution,
-        position=args.camera_position,
-        rotation=args.camera_rotation,
-    )
+    if from_scene:
+        register_scene_camera(resolution=args.resolution)
+    else:
+        add_camera_for_tank(
+            tank_objs,
+            args.resolution,
+            position=args.camera_position or DEFAULT_CAMERA_POSITION,
+            rotation=args.camera_rotation or DEFAULT_CAMERA_ROTATION,
+        )
 
     width, height = args.resolution
     print(f"Rendering {width}x{height} ...")
