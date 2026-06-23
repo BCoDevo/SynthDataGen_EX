@@ -109,6 +109,9 @@ Edit the constants at the top of `scripts/render_demo.py` to change default tank
 | Only `.hdf5`, no PNG | Run `python scripts/export_hdf5_image.py output/0.hdf5` |
 | Tank invisible / wrong size | Adjust `--tank-location` |
 | Wrong framing | Try `--no-use-scene-camera` with custom `--camera-position` |
+| Purple grass / missing textures | Ensure `Textures/` and `HDRs/` stay next to `Scene_Morning.blend` |
+| Flat / dark lighting | Script applies `spruit_sunrise_4k.hdr` automatically; try `--hdr-strength 2.0` |
+| Render takes forever | Scene has a 250-frame timeline; script resets to 1 frame + 32 samples |
 | First run is slow | BlenderProc is downloading Blender |
 
 ## License

@@ -11,9 +11,12 @@ Bundled teaching assets live here so students get everything in one clone.
 | `Textures/` | Polyhaven-style ground/plank PBR maps + grass PNG |
 
 **Audit (checked in):**
-- Blend loads 65 mesh objects + `Camera.001` at `[-0.26, -13.45, 1.32]`
-- HDR and texture paths are relative to this folder (~93 MB total)
-- Scene uses HDR/world lighting — no extra sun is added by the render script
+- Blend opens with `Morning` world + scene camera
+- Texture paths in the `.blend` originally pointed at `Pictures\Blender Textures\` on the author's machine
+- The render script **relinks** them to `assets/environment/Textures/` by filename at runtime
+- Tree/leaf textures not bundled use fallbacks (planks/grass) so nothing renders purple
+- Sky lighting comes from `HDRs/spruit_sunrise_4k.hdr` (scene has no lamps)
+- ~93 MB total
 
 **Default tank placement:** `[0, 3, 0.2]` on the open ground near the scene origin.
 

@@ -10,8 +10,10 @@ from pathlib import Path
 import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+ENVIRONMENT_DIR = PROJECT_ROOT / "assets" / "environment"
 
-DEFAULT_ENVIRONMENT = PROJECT_ROOT / "assets" / "environment" / "Scene_Morning.blend"
+DEFAULT_ENVIRONMENT = ENVIRONMENT_DIR / "Scene_Morning.blend"
+DEFAULT_HDR = ENVIRONMENT_DIR / "HDRs" / "spruit_sunrise_4k.hdr"
 DEFAULT_TANK = PROJECT_ROOT / "assets" / "objects" / "tank" / "cn_ztz_99a" / "ztz_99a_0.obj"
 DEFAULT_OUTPUT = PROJECT_ROOT / "output"
 
@@ -21,6 +23,21 @@ DEFAULT_TANK_LOCATION = [0.0, 3.0, 0.2]
 # Fallback camera when not using the scene's built-in camera
 DEFAULT_CAMERA_POSITION = [0.0, -13.0, 1.5]
 DEFAULT_CAMERA_ROTATION = [1.35, 0.0, 0.0]
+
+TEXTURE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".dds", ".hdr", ".exr"}
+
+# Tree/leaf textures not bundled in the repo — map to closest available PBR sets
+TEXTURE_FALLBACKS = {
+    "tree_bark_03_ao_2k.jpg": "brown_planks_03_AO_2k.jpg",
+    "tree_bark_03_diff_2k.jpg": "brown_planks_03_diff_2k.jpg",
+    "tree_bark_03_nor_2k.jpg": "brown_planks_03_Nor_2k.jpg",
+    "tree_bark_03_rough_2k.jpg": "brown_planks_03_rough_2k.jpg",
+    "leaf 2 front 1k_alb.jpg": "186-1868550_grass-blade-texture-png-grass.png",
+    "leaf 2 front 1k_dif.jpg": "186-1868550_grass-blade-texture-png-grass.png",
+    "leaf 2 front 1k_nor.jpg": "aerial_grass_rock_nor_2k.jpg",
+    "dry-tree-branch-isolated-white-background-png-file-transparent-also-available-wooden-fallen-to-ground-high-quality-160380970.jpg": "brown_planks_03_diff_2k.jpg",
+    "dry-tree-branch-isolated-white-background-png-file-transparent-": "brown_planks_03_diff_2k.jpg",
+}
 
 
 def load_mesh_asset(path: Path):
@@ -33,13 +50,88 @@ def load_mesh_asset(path: Path):
     raise ValueError(f"Unsupported mesh format: {path}")
 
 
-def load_environment(path: Path):
-    """Load a full .blend environment (meshes, lights, cameras, collections)."""
-    return bproc.loader.load_blend(
-        str(path),
-        data_blocks=["objects", "collections"],
-        obj_types=["mesh", "empty", "light", "camera"],
-    )
+def _build_texture_index(env_dir: Path) -> dict[str, Path]:
+    index: dict[str, Path] = {}
+    for path in env_dir.rglob("*"):
+        if path.suffix.lower() in TEXTURE_EXTENSIONS:
+            index[path.name.lower()] = path
+    return index
+
+
+def relink_environment_textures(env_dir: Path) -> tuple[int, int]:
+    """Point blend image datablocks at files under assets/environment/."""
+    import bpy
+
+    index = _build_texture_index(env_dir)
+    fixed = 0
+    still_missing = 0
+
+    for image in bpy.data.images:
+        if image.packed_file:
+            continue
+
+        keys = []
+        if image.filepath:
+            keys.append(Path(bpy.path.abspath(image.filepath)).name.lower())
+        keys.append(image.name.lower())
+
+        resolved = None
+        for key in keys:
+            if not key:
+                continue
+            if key in index:
+                resolved = index[key]
+                break
+            fallback = TEXTURE_FALLBACKS.get(key)
+            if fallback and fallback.lower() in index:
+                resolved = index[fallback.lower()]
+                break
+
+        if resolved is None:
+            if image.filepath:
+                still_missing += 1
+            continue
+
+        image.filepath = str(resolved)
+        image.reload()
+        fixed += 1
+
+    return fixed, still_missing
+
+
+def configure_renderer(samples: int = 32) -> None:
+    """Apply BlenderProc Cycles settings suitable for classroom demo renders."""
+    import bpy
+    from blenderproc.python.renderer import RendererUtility
+
+    bpy.context.scene.render.engine = "CYCLES"
+    RendererUtility.set_render_devices()
+    RendererUtility.render_init()
+    RendererUtility.set_max_amount_of_samples(samples)
+
+
+def open_environment_blend(path: Path) -> None:
+    """Open the full .blend scene so world/materials/camera are preserved."""
+    import bpy
+    from blenderproc.python.utility.Utility import reset_keyframes
+
+    bpy.ops.wm.open_mainfile(filepath=str(path))
+    # init() ran first; reopening the .blend resets engine/settings.
+    configure_renderer()
+
+    # Scene file carries a long timeline — demo only needs one still frame.
+    bpy.context.scene.frame_start = 1
+    bpy.context.scene.frame_end = 1
+    bpy.context.scene.frame_set(1)
+    reset_keyframes()
+
+
+def apply_sky_lighting(hdr_path: Path, strength: float = 1.2) -> None:
+    """Scene has no lamps — drive lighting from the bundled morning HDR."""
+    if not hdr_path.exists():
+        raise FileNotFoundError(f"HDR not found: {hdr_path}")
+    bproc.world.set_world_background_hdr_img(str(hdr_path), strength=strength)
+    print(f"Sky lighting: {hdr_path.name} (strength={strength})")
 
 
 def setup_studio_scene():
@@ -111,6 +203,18 @@ def parse_args():
         type=Path,
         default=DEFAULT_ENVIRONMENT,
         help=f"Path to environment .blend (default: {DEFAULT_ENVIRONMENT})",
+    )
+    parser.add_argument(
+        "--hdr",
+        type=Path,
+        default=DEFAULT_HDR,
+        help=f"HDR sky for environment lighting (default: {DEFAULT_HDR})",
+    )
+    parser.add_argument(
+        "--hdr-strength",
+        type=float,
+        default=1.2,
+        help="Brightness of the HDR sky (default: 1.2)",
     )
     parser.add_argument(
         "--tank",
@@ -188,10 +292,17 @@ def main():
         )
 
     bproc.init()
+    if not use_environment:
+        configure_renderer()
 
     if use_environment:
-        print(f"Loading environment: {args.environment}")
-        load_environment(args.environment)
+        print(f"Opening environment: {args.environment}")
+        open_environment_blend(args.environment)
+
+        fixed, missing = relink_environment_textures(ENVIRONMENT_DIR)
+        print(f"Relinked {fixed} environment texture(s); {missing} still missing (tree/leaf fallbacks applied where possible)")
+
+        apply_sky_lighting(args.hdr, strength=args.hdr_strength)
     else:
         print("No environment — using studio ground plane (--tank-only)")
         setup_studio_scene()
