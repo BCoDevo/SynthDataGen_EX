@@ -35,7 +35,7 @@ DEFAULT_SAMPLES = 128
 DEFAULT_CAMERA_OFFSET = [10.0, -10.0, 4.0]
 
 # Rotate environment (deg Z) so authored scene framing faces the demo camera
-DEFAULT_ENVIRONMENT_ROTATION_Z = -45.9
+DEFAULT_ENVIRONMENT_ROTATION_Z = 45.9
 
 # YOLO: BlenderProc category_id on tank -> class 0 in labels/classes.txt
 TANK_CATEGORY_ID = 1
