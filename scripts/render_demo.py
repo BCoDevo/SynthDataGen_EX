@@ -5,11 +5,17 @@ import blenderproc as bproc
 # Tank-only preview:      blenderproc run scripts/render_demo.py -- --tank-only
 
 import argparse
+import sys
 from pathlib import Path
 
 import numpy as np
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+from yolo_writer import DEFAULT_CLASS_NAMES, write_yolo_dataset
+
+PROJECT_ROOT = SCRIPT_DIR.parent
 ENVIRONMENT_DIR = PROJECT_ROOT / "assets" / "environment"
 
 DEFAULT_ENVIRONMENT = ENVIRONMENT_DIR / "Scene_Morning.blend"
@@ -27,6 +33,9 @@ DEFAULT_SAMPLES = 128
 
 # Demo camera: offset from tank center of interest (same as tank-only preview — more top-down)
 DEFAULT_CAMERA_OFFSET = [10.0, -10.0, 4.0]
+
+# YOLO: BlenderProc category_id on tank -> class 0 in labels/classes.txt
+TANK_CATEGORY_ID = 1
 
 TEXTURE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".dds", ".hdr", ".exr"}
 
@@ -199,6 +208,20 @@ def register_scene_camera(resolution, camera_name: str = DEFAULT_SCENE_CAMERA):
     print(f"Using scene camera: {cam_obj.name} ({width}x{height}, {cam_data.lens} mm)")
 
 
+def label_tank_objects(tank_objs) -> None:
+    """Tag tank mesh(es) for instance segmentation / YOLO export."""
+    for obj in tank_objs:
+        obj.set_cp("category_id", TANK_CATEGORY_ID)
+
+
+def render_segmentation_maps():
+    """Fast 1-sample pass producing per-instance masks and class attributes."""
+    return bproc.renderer.render_segmap(
+        map_by=["instance", "class"],
+        default_values={"class": 0},
+    )
+
+
 def add_camera_for_tank(tank_objs, resolution, offset=None):
     """Frame the tank from above — auto-aim at its center (hides ground-gap better)."""
     width, height = resolution
@@ -290,6 +313,12 @@ def parse_args():
         default=False,
         help="Use the camera baked into the environment .blend (default: demo top-down framing)",
     )
+    parser.add_argument(
+        "--yolo",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Export YOLO detection labels (default: on)",
+    )
     return parser.parse_args()
 
 
@@ -330,6 +359,7 @@ def main():
     tank_objs = load_mesh_asset(args.tank)
     for obj in tank_objs:
         obj.set_location(list(args.tank_location))
+    label_tank_objects(tank_objs)
     print(f"Placed {len(tank_objs)} tank object(s) at {args.tank_location}")
 
     if args.use_scene_camera:
@@ -348,12 +378,41 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     bproc.writer.write_hdf5(str(args.output), data)
 
+    rgb = data["colors"][0]
     png_path = args.output / "render.png"
-    save_png(png_path, data["colors"][0])
+    save_png(png_path, rgb)
+
+    label_path = None
+    if args.yolo:
+        print("Rendering instance segmentation for YOLO labels ...")
+        seg_data = render_segmentation_maps()
+        inst_segmap = seg_data["instance_segmaps"]
+        inst_attrs = seg_data["instance_attribute_maps"]
+        if isinstance(inst_segmap, list):
+            inst_segmap = inst_segmap[0]
+            inst_attrs = inst_attrs[0]
+
+        images_dir = args.output / "images"
+        images_dir.mkdir(parents=True, exist_ok=True)
+        yolo_image_path = images_dir / "render.png"
+        save_png(yolo_image_path, rgb)
+
+        label_path = write_yolo_dataset(
+            args.output,
+            image_stem="render",
+            instance_segmap=inst_segmap,
+            instance_attribute_map=inst_attrs,
+            class_names=DEFAULT_CLASS_NAMES,
+        )
+        box_count = len(label_path.read_text(encoding="utf-8").splitlines()) if label_path.exists() else 0
+        print(f"YOLO: {box_count} box(es) -> {label_path}")
 
     print("Done.")
     print(f"  PNG:  {png_path}")
     print(f"  HDF5: {args.output / '0.hdf5'}")
+    if label_path is not None:
+        print(f"  YOLO: {args.output / 'data.yaml'}")
+        print(f"        python scripts/visualize_yolo.py {args.output / 'images' / 'render.png'}")
 
 
 if __name__ == "__main__":

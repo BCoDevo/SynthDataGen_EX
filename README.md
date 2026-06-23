@@ -18,7 +18,9 @@ Students clone the repo, pull bundled test assets, and run one script.
 │           └── cn_ztz_99a/      # bundled ZTZ-99A (War Thunder export)
 │               └── ztz_99a_0.obj
 ├── scripts/
-│   ├── render_demo.py           # the demo pipeline
+│   ├── render_demo.py           # the demo pipeline (+ YOLO labels)
+│   ├── yolo_writer.py           # instance seg → YOLO txt
+│   ├── visualize_yolo.py        # draw boxes on render (no Blender)
 │   └── export_hdf5_image.py     # HDF5 → PNG/JPG (no Blender needed)
 ├── output/                      # renders land here (see output/README.md)
 ├── requirements.txt
@@ -62,6 +64,14 @@ Outputs (see `output/README.md` for details):
 
 - `output/render.png` — quick visual check
 - `output/0.hdf5` — full BlenderProc frame
+- `output/labels/render.txt` — YOLO bbox labels (on by default)
+- `output/data.yaml` — YOLO dataset config
+
+Preview annotations:
+
+```bash
+python scripts/visualize_yolo.py output/images/render.png
+```
 
 **Export PNG from an existing HDF5** (e.g. after `blenderproc quickstart`):
 

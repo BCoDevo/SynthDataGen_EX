@@ -8,6 +8,12 @@ BlenderProc writes rendered frames here. Contents are gitignored except this REA
 |------|-------------|
 | `0.hdf5` | Full frame data (RGB, and more if enabled in the script) |
 | `render.png` | Quick-view image (written by `scripts/render_demo.py`) |
+| `images/render.png` | Same image, YOLO dataset layout |
+| `labels/render.txt` | YOLO bbox labels (`class x_center y_center w h`, normalized) |
+| `classes.txt` | Class names (`tank`) |
+| `data.yaml` | YOLOv8-style dataset config |
+
+Disable YOLO export: `blenderproc run scripts/render_demo.py -- --no-yolo`
 
 > **Note:** `blenderproc quickstart` only writes `.hdf5` — it does not create a PNG. Use the export options below.
 
@@ -47,3 +53,25 @@ with h5py.File("output/0.hdf5") as f:
 ```
 
 If depth or normals are enabled in the render script, those arrays appear as additional keys.
+
+## YOLO annotations
+
+Each label line is one detected tank:
+
+```
+0 0.556250 0.548333 0.852500 0.710000
+```
+
+Preview boxes on the image:
+
+```bash
+python scripts/visualize_yolo.py output/images/render.png
+```
+
+Writes `output/images/render_annotated.png`.
+
+Train with Ultralytics (example):
+
+```bash
+yolo detect train data=output/data.yaml model=yolov8n.pt epochs=50 imgsz=640
+```
