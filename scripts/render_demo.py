@@ -254,12 +254,47 @@ def label_tank_objects(tank_objs) -> None:
         obj.set_cp("category_id", TANK_CATEGORY_ID)
 
 
-def render_segmentation_maps():
+def _displace_non_tank_meshes(tank_objs) -> list[tuple[str, str]]:
+    """Remove non-tank meshes from the scene so segmap only colorizes targets.
+
+    BlenderProc assigns one instance color per scene mesh. Large environments can
+    produce decoded IDs that exceed the object list ("more object colors than objects").
+    """
+    import bpy
+
+    tank_names = {obj.blender_obj.name for obj in tank_objs}
+    displaced: list[tuple[str, str]] = []
+    for obj in list(bpy.data.objects):
+        if obj.type != "MESH" or obj.name in tank_names:
+            continue
+        for coll in list(obj.users_collection):
+            displaced.append((obj.name, coll.name))
+            coll.objects.unlink(obj)
+    return displaced
+
+
+def _restore_displaced_meshes(displaced: list[tuple[str, str]]) -> None:
+    import bpy
+
+    for obj_name, coll_name in displaced:
+        obj = bpy.data.objects.get(obj_name)
+        coll = bpy.data.collections.get(coll_name)
+        if obj is None or coll is None:
+            continue
+        if obj.name not in coll.objects:
+            coll.objects.link(obj)
+
+
+def render_segmentation_maps(tank_objs):
     """Fast 1-sample pass producing per-instance masks and class attributes."""
-    return bproc.renderer.render_segmap(
-        map_by=["instance", "class"],
-        default_values={"class": 0},
-    )
+    displaced = _displace_non_tank_meshes(tank_objs)
+    try:
+        return bproc.renderer.render_segmap(
+            map_by=["instance", "class"],
+            default_values={"class": 0},
+        )
+    finally:
+        _restore_displaced_meshes(displaced)
 
 
 def add_camera_for_tank(tank_objs, resolution, offset=None):
@@ -445,7 +480,7 @@ def main():
     label_path = None
     if args.yolo:
         print("Rendering instance segmentation for YOLO labels ...")
-        seg_data = render_segmentation_maps()
+        seg_data = render_segmentation_maps(tank_objs)
         inst_segmap = seg_data["instance_segmaps"]
         inst_attrs = seg_data["instance_attribute_maps"]
         if isinstance(inst_segmap, list):
