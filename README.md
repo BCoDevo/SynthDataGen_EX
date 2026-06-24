@@ -2,7 +2,7 @@
 
 Minimal hands-on demo for generating a single synthetic image: one War Thunder tank placed in a Blender environment.
 
-Students clone the repo, pull bundled test assets, and run one script.
+Students clone the repo (assets are bundled — no separate download) and run one script.
 
 ## Project layout
 
@@ -33,7 +33,7 @@ Students clone the repo, pull bundled test assets, and run one script.
 
 ```bash
 git clone https://github.com/BCoDevo/SynthDataGen_EX.git
-cd synthetic-data-demo
+cd SynthDataGen_EX
 
 python -m venv .venv
 # Windows
@@ -52,7 +52,7 @@ On first run, BlenderProc downloads Blender automatically (~500 MB). This is nor
 blenderproc run scripts/render_demo.py
 ```
 
-Uses `Scene_Morning.blend` with a **top-down demo camera** (same framing as `--tank-only`). Tank is placed at `[0, 3, 0.2]` by default.
+Uses `Scene_Morning.blend` with a **top-down demo camera** (same framing as `--tank-only`). Tank is placed at `[0, 3, 0.2]` by default. Default resolution is **1920×1080** at 128 Cycles samples — expect ~1 minute on a mid-range GPU.
 
 ### 3. Tank-only preview (no environment)
 
@@ -60,11 +60,14 @@ Uses `Scene_Morning.blend` with a **top-down demo camera** (same framing as `--t
 blenderproc run scripts/render_demo.py -- --tank-only
 ```
 
-Outputs (see `output/README.md` for details):
+### 4. Outputs
+
+Every successful render writes (see `output/README.md` for details):
 
 - `output/render.png` — quick visual check
+- `output/images/render.png` — same image, YOLO dataset layout
 - `output/0.hdf5` — full BlenderProc frame
-- `output/labels/render.txt` — YOLO bbox labels (on by default)
+- `output/labels/render.txt` — YOLO bbox labels (on by default; disable with `--no-yolo`)
 - `output/data.yaml` — YOLO dataset config
 
 Preview annotations (run after `blenderproc run ...` — does not re-render):
@@ -79,7 +82,7 @@ python scripts/visualize_yolo.py
 python scripts/export_hdf5_image.py output/0.hdf5
 ```
 
-### 4. Debug in Blender GUI (optional)
+### 5. Debug in Blender GUI (optional)
 
 ```bash
 blenderproc debug scripts/render_demo.py
@@ -95,16 +98,19 @@ blenderproc run scripts/render_demo.py -- \
   --camera-offset 8 -8 9 \
   --use-scene-camera \
   --resolution 1920 1080 \
+  --samples 256 \
+  --no-yolo \
   --output output/run_01
 ```
 
-Edit the constants at the top of `scripts/render_demo.py` to change default tank placement and fallback camera.
+Edit the constants at the top of `scripts/render_demo.py` to change default tank placement, environment rotation, and fallback camera.
 
 ## Asset prep tips
 
 **Environment (`Scene_Morning.blend`)**
 - Keep `HDRs/` and `Textures/` alongside the blend file so relative paths resolve
-- Default camera auto-frames the tank from above; pass `--use-scene-camera` for the blend's baked camera
+- The **demo camera** frames the tank from above by default; pass `--use-scene-camera` for the blend's baked camera
+- Environment objects are rotated **+45.9°** on Z around the tank pivot so the scene faces the demo camera (override with `--env-rotation`)
 
 **Tank (War Thunder export)**
 - Default mesh: `ztz_99a_0.obj` with DDS textures in `textures/`
@@ -124,6 +130,7 @@ Edit the constants at the top of `scripts/render_demo.py` to change default tank
 | Render looks grainy | Default is 128 samples + OPTIX denoise; try `--samples 256` |
 | Render takes forever | Scene has a 250-frame timeline; script resets to 1 frame |
 | First run is slow | BlenderProc is downloading Blender |
+| YOLO step fails on large scenes | Fixed in current script — update repo; or skip with `--no-yolo` |
 
 ## License
 
