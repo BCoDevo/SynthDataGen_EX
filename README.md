@@ -32,7 +32,7 @@ Students clone the repo, pull bundled test assets, and run one script.
 ### 1. Clone and install
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/BCoDevo/SynthDataGen_EX.git
 cd synthetic-data-demo
 
 python -m venv .venv
