@@ -4,6 +4,8 @@ Minimal hands-on demo for generating a single synthetic image: one War Thunder t
 
 Students clone the repo (assets are bundled — no separate download) and run one script.
 
+**Teaching this in a class?** Start with **[LESSON.md](LESSON.md)** — a hands-on workbook where students look up paths, build commands, and inspect labels (not just copy-paste). Instructor notes: `lesson/INSTRUCTOR.md`.
+
 ## Project layout
 
 ```
@@ -21,8 +23,11 @@ Students clone the repo (assets are bundled — no separate download) and run on
 │   ├── render_demo.py           # the demo pipeline (+ YOLO labels)
 │   ├── yolo_writer.py           # instance seg → YOLO txt
 │   ├── visualize_yolo.py        # draw boxes on render (no Blender)
-│   └── export_hdf5_image.py     # HDF5 → PNG/JPG (no Blender needed)
+│   ├── export_hdf5_image.py     # HDF5 → PNG/JPG (no Blender needed)
+│   └── lesson_check.py          # self-check for LESSON.md exercises
 ├── output/                      # renders land here (see output/README.md)
+├── lesson/                      # worksheet template + instructor notes
+├── LESSON.md                    # hands-on student workbook (~60–90 min)
 ├── requirements.txt
 └── README.md
 ```

@@ -4,6 +4,9 @@ output/*
 !output/.gitkeep
 !output/README.md
 
+# Lesson worksheets (students copy from lesson/worksheet.example.md)
+lesson/worksheet.md
+
 # Python
 __pycache__/
 *.py[cod]
