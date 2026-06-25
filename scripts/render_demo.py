@@ -11,7 +11,38 @@ from pathlib import Path
 
 import numpy as np
 
-SCRIPT_DIR = Path(__file__).resolve().parent
+
+def _resolve_script_dir() -> Path:
+    """Locate scripts/ for imports in both blenderproc run and debug (text editor) modes."""
+    if globals().get("__file__"):
+        script_dir = Path(__file__).resolve().parent
+        if (script_dir / "yolo_writer.py").exists():
+            return script_dir
+
+    try:
+        import bpy
+
+        for text in bpy.data.texts:
+            if not text.filepath:
+                continue
+            script_dir = Path(bpy.path.abspath(text.filepath)).parent
+            if script_dir.name == "scripts" and (script_dir / "yolo_writer.py").exists():
+                return script_dir
+    except ImportError:
+        pass
+
+    for root in (Path.cwd(), Path.cwd().parent):
+        script_dir = root / "scripts"
+        if (script_dir / "yolo_writer.py").exists():
+            return script_dir
+
+    raise ImportError(
+        "Cannot import yolo_writer — scripts/ not on path. "
+        "Run from the repo root: blenderproc run scripts/render_demo.py"
+    )
+
+
+SCRIPT_DIR = _resolve_script_dir()
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 from yolo_writer import DEFAULT_CLASS_NAMES, write_yolo_dataset
@@ -95,30 +126,140 @@ def relink_tank_textures(tank_obj_path: Path) -> int:
     return fixed
 
 
+def _operator_context_override() -> dict | None:
+    """Build a viewport context so bpy.ops imports work from the text editor (debug mode)."""
+    import bpy
+
+    for window in bpy.context.window_manager.windows:
+        screen = window.screen
+        for area in screen.areas:
+            if area.type != "VIEW_3D":
+                continue
+            for region in area.regions:
+                if region.type != "WINDOW":
+                    continue
+                return {
+                    "window": window,
+                    "screen": screen,
+                    "area": area,
+                    "region": region,
+                    "scene": bpy.context.scene,
+                    "view_layer": bpy.context.view_layer,
+                }
+    return None
+
+
+def load_obj_safe(filepath: Path):
+    """Load OBJ without bpy.context.selected_objects (breaks in blenderproc debug)."""
+    import bpy
+    from blenderproc.python.types.MeshObjectUtility import convert_to_meshes
+
+    filepath = resolve_project_path(filepath)
+    before = {obj.name for obj in bpy.data.objects}
+    import_kwargs = {"filepath": str(filepath), "validate_meshes": False}
+    override = _operator_context_override()
+    if override:
+        with bpy.context.temp_override(**override):
+            bpy.ops.wm.obj_import(**import_kwargs)
+    else:
+        bpy.ops.wm.obj_import(**import_kwargs)
+
+    new_objects = [
+        obj for obj in bpy.data.objects
+        if obj.name not in before and obj.type == "MESH"
+    ]
+    mesh_objects = convert_to_meshes(new_objects)
+    for obj in mesh_objects:
+        obj.set_cp("model_path", str(filepath))
+    return mesh_objects
+
+
 def load_mesh_asset(path: Path):
     """Load a mesh from .blend, .obj, or .ply."""
     path = resolve_project_path(path)
     suffix = path.suffix.lower()
     if suffix == ".blend":
         return bproc.loader.load_blend(str(path))
-    if suffix in (".obj", ".ply"):
+    if suffix == ".obj":
+        try:
+            objs = bproc.loader.load_obj(str(path))
+        except AttributeError:
+            objs = load_obj_safe(path)
+    elif suffix == ".ply":
         objs = bproc.loader.load_obj(str(path))
+    else:
+        raise ValueError(f"Unsupported mesh format: {path}")
+    if suffix in (".obj", ".ply"):
         fixed = relink_tank_textures(path)
         if fixed:
             print(f"Relinked {fixed} tank texture(s) from {path.parent / 'textures'}")
-        return objs
-    raise ValueError(f"Unsupported mesh format: {path}")
+    return objs
+
+
+def is_blenderproc_debug() -> bool:
+    """True when launched via `blenderproc debug` (debug_startup.py sets sys.argv[0] = 'debug')."""
+    return bool(sys.argv) and sys.argv[0] == "debug"
 
 
 def pause_for_inspection(enabled: bool) -> None:
-    """Optional hold before the Cycles render so debug sessions can inspect the scene."""
+    """Optional hold before the Cycles render (blenderproc run only — not used in debug inspect mode)."""
     if not enabled:
         return
-    print("Pause before render — inspect the scene in Blender, then press Enter to continue.")
+    print("Pause before render — press Enter in the terminal to continue to Cycles.")
     try:
         input()
     except EOFError:
         print("(stdin closed — continuing without pause)")
+
+
+def finish_scene_inspection() -> None:
+    """Switch to Layout and redraw so the viewport shows the set-up scene (debug inspect mode)."""
+    import bpy
+
+    try:
+        bpy.context.window.workspace = bpy.data.workspaces["Layout"]
+    except (AttributeError, KeyError, TypeError):
+        pass
+
+    tank_obj = None
+    for obj in bpy.data.objects:
+        if obj.type == "MESH" and "ztz" in obj.name.lower():
+            tank_obj = obj
+            break
+
+    if tank_obj is not None:
+        bpy.ops.object.select_all(action="DESELECT")
+        tank_obj.select_set(True)
+        bpy.context.view_layer.objects.active = tank_obj
+        for window in bpy.context.window_manager.windows:
+            screen = window.screen
+            for area in screen.areas:
+                if area.type != "VIEW_3D":
+                    continue
+                for region in area.regions:
+                    if region.type != "WINDOW":
+                        continue
+                    with bpy.context.temp_override(
+                        window=window,
+                        screen=screen,
+                        area=area,
+                        region=region,
+                        scene=bpy.context.scene,
+                        view_layer=bpy.context.view_layer,
+                    ):
+                        try:
+                            bpy.ops.view3d.view_selected()
+                        except RuntimeError:
+                            pass
+                    break
+
+    for window in bpy.context.window_manager.windows:
+        for area in window.screen.areas:
+            area.tag_redraw()
+
+    print("Inspect-only — scene ready in Layout. Orbit the viewport and check the Outliner.")
+    print("Compare Object → Transform to your --tank-location / --camera-offset flags.")
+    print("Close Blender when finished (no render will run).")
 
 
 def _build_texture_index(env_dir: Path) -> dict[str, Path]:
@@ -458,7 +599,17 @@ def parse_args():
     parser.add_argument(
         "--pause-before-render",
         action="store_true",
-        help="Wait for Enter after scene setup (use with blenderproc debug to inspect first)",
+        help="Wait for Enter after scene setup, then render (blenderproc run only)",
+    )
+    parser.add_argument(
+        "--inspect-only",
+        action="store_true",
+        help="Set up the scene and stop before render; Blender stays open for inspection",
+    )
+    parser.add_argument(
+        "--force-render",
+        action="store_true",
+        help="Render in blenderproc debug (default debug mode is --inspect-only)",
     )
     return parser.parse_args()
 
@@ -476,6 +627,19 @@ def main():
             f"Tank asset not found: {args.tank}\n"
             "Expected bundled asset at assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj"
         )
+
+    inspect_only = args.inspect_only or (is_blenderproc_debug() and not args.force_render)
+
+    if inspect_only:
+        args.yolo = False
+        if is_blenderproc_debug() and not args.inspect_only:
+            print("blenderproc debug: inspect-only mode (scene setup, no render). Pass --force-render to render.")
+    elif args.yolo and is_blenderproc_debug():
+        print(
+            "Skipping YOLO export in blenderproc debug — instance segmap needs background context. "
+            "Use `blenderproc run` for labels."
+        )
+        args.yolo = False
 
     use_environment = not args.tank_only
     if use_environment and not args.environment.exists():
@@ -525,6 +689,10 @@ def main():
             args.resolution,
             offset=args.camera_offset,
         )
+
+    if inspect_only:
+        finish_scene_inspection()
+        return
 
     pause_for_inspection(args.pause_before_render)
 

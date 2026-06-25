@@ -1,61 +1,50 @@
 # Exercise 8 — Blender GUI walkthrough
 
-Use this alongside `LESSON.md` Exercise 8. Screenshots are optional for instructors; each step describes what you should see.
+Use with `LESSON.md` Exercise 8. **Goal:** see the same scene the CLI builds — orbit the viewport, read the Outliner — then close Blender yourself. No render runs; Blender does not auto-exit when the script finishes.
 
-**Prerequisite:** Complete Exercise 5 so you have a mental model of the full scene.
+**Prerequisite:** Exercise 5 (`blenderproc run` full environment).
 
 ---
 
-## Path A — Inspect the live pipeline (`blenderproc debug` + pause)
+## Path A — Live scene from the pipeline (`blenderproc debug`)
 
-This opens Blender with `render_demo.py` loaded and **holds before the Cycles render** so you can orbit the scene.
+`blenderproc debug` opens Blender with `render_demo.py` loaded. **Inspect-only is the default in debug** — the script sets up the environment, tank, and camera, then stops. Blender stays open.
 
 ```bash
-blenderproc debug scripts/render_demo.py -- \
-  --environment assets/environment/Scene_Morning.blend \
-  --hdr assets/environment/HDRs/spruit_sunrise_4k.hdr \
-  --tank assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj \
-  --tank-location 0 3 0.2 \
-  --camera-offset 10 -10 4 \
-  --resolution 640 360 \
-  --samples 4 \
-  --pause-before-render \
-  --output output/lesson_08
+blenderproc debug scripts/render_demo.py -- --environment assets/environment/Scene_Morning.blend --hdr assets/environment/HDRs/spruit_sunrise_4k.hdr --tank assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj --tank-location 0 3 0.2 --camera-offset 10 -10 4
 ```
 
-### Step 1 — Scripting workspace
+Use forward slashes on all platforms. Run from the **repo root**.
 
-| Area | What to look for |
-|------|------------------|
-| Text editor (top) | `render_demo.py` source |
-| BlenderProc panel | **Run BlenderProc** button |
-| System console | Log lines (`Opening environment`, `Loading tank`, `Pause before render`) |
+### What happens
 
-Run the script once. When the console prints **Pause before render**, do **not** press Enter yet.
+1. Blender opens on the **Scripting** workspace (scene is empty at first — expected).
+2. Click **Run BlenderProc** (toolbar above the text editor).
+3. Log prints: environment open, tank load, `Inspect-only — scene ready in Layout`.
+4. Blender switches to **Layout** and frames the tank. Orbit the viewport.
 
-### Step 2 — Layout workspace (scene paused)
+The terminal stays attached until you **close Blender** — that is normal.
 
-| Area | What to look for |
-|------|------------------|
-| **Outliner** (top-right) | `ztz_99a_0` or similar tank mesh; dozens of environment meshes if not `--tank-only` |
-| **3D Viewport** | Tank on terrain; demo camera framing |
-| **Properties → Object → Transform** | Location ≈ `(0, 3, 0.2)` when tank-location matches |
+### What to inspect
 
-**Navigate:** Middle-mouse orbit, Shift+middle-mouse pan, scroll zoom. Press **Numpad .** to frame the selected object.
+| Area | Look for |
+|------|----------|
+| **Outliner** | Tank mesh (`ztz_99a_0`); ~64 environment objects |
+| **3D Viewport** | Tank on terrain; HDR-lit scene |
+| **Properties → Object → Transform** | Location ≈ `(0, 3, 0.2)` per `--tank-location` |
+| **View → Cameras → Active Camera** / **Numpad 0** | Demo camera framing vs. Exercise 5 PNG |
 
-**Compare:** Transform location vs. your `--tank-location` from Exercises 3–4.
+**Navigate:** MMB orbit · Shift+MMB pan · scroll zoom · **Numpad .** frame selection
 
-### Step 3 — Camera
+### Optional: render from debug
 
-| Action | What to look for |
-|--------|------------------|
-| Select camera in Outliner (or View → Cameras → Active Camera) | Orange pyramid icon |
-| **Numpad 0** | Camera view — should match your rendered PNG framing |
-| Adjust `--camera-offset` in a later run | Camera moves relative to tank center |
+To run Cycles inside debug (Blender still closes when you quit the app afterward):
 
-### Step 4 — Resume render
+```bash
+blenderproc debug scripts/render_demo.py -- --force-render --environment assets/environment/Scene_Morning.blend --hdr assets/environment/HDRs/spruit_sunrise_4k.hdr --tank assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj --output output/lesson_08_debug
+```
 
-Focus the system console / terminal and press **Enter**. The script finishes the RGB + YOLO passes and writes `output/lesson_08/`.
+YOLO labels still require `blenderproc run`, not debug.
 
 ---
 
@@ -64,51 +53,47 @@ Focus the system console / terminal and press **Enter**. The script finishes the
 Copy the Blender path from any `blenderproc run` log:
 
 ```
-Using blender in C:\Users\<you>\blender\blender-4.2.1-windows-x64\...
+Using blender in /home/<you>/blender/blender-4.2.1-linux-x64/...
 ```
 
 ```bash
-# Windows — quote the path from your log
-& "<path-to-blender>\blender.exe" assets\environment\Scene_Morning.blend
+# Linux / macOS
+/path/to/blender assets/environment/Scene_Morning.blend
 ```
 
-### What to inspect
+```powershell
+# Windows
+& "C:\path\to\blender.exe" assets/environment/Scene_Morning.blend
+```
 
-| Target | Where | Note |
-|--------|-------|------|
-| Baked scene camera | Outliner → `Camera` | Authored framing; differs from demo camera |
-| Ground placement | 3D cursor near `(0, 3, 0)` | Tank pivot used by the script |
-| World shader | Shading workspace → World | May be empty/overridden at render time by HDR |
-| Terrain materials | Shading → mesh selected | Image Texture nodes → filenames under `assets/environment/Textures/` |
+| Target | Note |
+|--------|------|
+| Outliner → `Camera` | Baked scene camera; differs from demo camera |
+| Ground near `(0, 3, 0)` | Tank pivot from the script |
+| Shading on terrain | Texture nodes → `assets/environment/Textures/` |
 
 ---
 
 ## Path C — Tank OBJ alone
 
-```bash
-& "<path-to-blender>\blender.exe" --factory-startup assets\objects\tank\cn_ztz_99a\ztz_99a_0.obj
-```
+**File → Import → Wavefront (.obj)** from a blank file, or:
 
-Or **File → Import → Wavefront (.obj)** from a blank file.
+```bash
+/path/to/blender --factory-startup assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj
+```
 
 | Check | Expected |
 |-------|----------|
-| Materials | DDS textures visible in Shading (not flat gray) |
-| Scale | Real-world sized mesh (tens of meters — game export) |
-| Outliner | Single primary mesh object |
-
-This mesh is what instance segmentation colorizes for YOLO — the bounding box wraps its projected silhouette.
+| Materials | DDS textures in Shading (not flat gray) |
+| Scale | Large game export (tens of meters) |
+| Mesh | Single object — this is what segmentation labels |
 
 ---
 
 ## Instructor screenshot checklist (optional)
 
-Capture these for slide decks:
-
-1. Scripting tab with Run BlenderProc highlighted
-2. Outliner with tank + environment expanded
-3. Object Properties Transform next to a render with same `--tank-location`
-4. Camera view (Numpad 0) beside `output/lesson_05/images/render.png`
-5. Shading workspace on tank with DDS texture nodes
-
-Save under `lesson/screenshots/` if you add them to the repo (not required for students).
+1. Scripting tab — **Run BlenderProc** button
+2. Layout — Outliner with tank + environment
+3. Transform panel vs. `--tank-location`
+4. Camera view (Numpad 0) vs. `output/lesson_05/images/render.png`
+5. Shading — tank DDS nodes

@@ -82,6 +82,23 @@ blenderproc run scripts/render_demo.py -- --tank-only ...
 
 Without `--`, flags may be swallowed and textures/HDR paths can fail to resolve.
 
+**PowerShell:** use a **backtick** `` ` `` for line breaks, not `\` (which bash uses). Or put the command on one line:
+
+```powershell
+# Multi-line (PowerShell)
+blenderproc run scripts/render_demo.py -- `
+  --tank-only `
+  --tank assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj `
+  --resolution 640 360 `
+  --samples 16 `
+  --output output/lesson_02
+```
+
+```powershell
+# Single line — works everywhere
+blenderproc run scripts/render_demo.py -- --tank-only --tank assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj --resolution 640 360 --samples 16 --output output/lesson_02
+```
+
 Before running:
 
 1. What does `--tank-only` skip?
@@ -200,7 +217,6 @@ blenderproc run scripts/render_demo.py -- \
 
 While rendering, read the log:
 
-- `Relinked N environment texture(s)` — broken paths from the author's machine are remapped to `assets/environment/Textures/`
 - `Sky lighting: ...` — **HDR** (High Dynamic Range) world background; the blend has no scene lamps
 
 ```bash
@@ -252,26 +268,20 @@ Why does the pipeline write both HDF5 and PNG?
 
 Connect CLI parameters to the underlying 3D data. Step-by-step viewport guide: **`lesson/BLENDER_GUI.md`**.
 
-### 8a — Pipeline view (`blenderproc debug` + pause)
+### 8a — Pipeline view (`blenderproc debug`)
 
-Opens the same Blender build used by your renders. `--pause-before-render` stops after scene setup so you can inspect before Cycles runs:
+Opens the same Blender build used by your renders. **Debug defaults to inspect-only** — scene setup runs, no Cycles render, Blender stays open until you close it.
 
 ```bash
-blenderproc debug scripts/render_demo.py -- \
-  --environment <env-path> \
-  --hdr <hdr-path> \
-  --tank <tank-path> \
-  --tank-location 0 3 0.2 \
-  --camera-offset 10 -10 4 \
-  --resolution 640 360 \
-  --samples 4 \
-  --pause-before-render \
-  --output output/lesson_08
+blenderproc debug scripts/render_demo.py -- --environment <env-path> --hdr <hdr-path> --tank <tank-path> --tank-location 0 3 0.2 --camera-offset 10 -10 4
 ```
 
-1. **Scripting** → Run BlenderProc.
-2. When the console prints **Pause before render**, switch to **Layout** — orbit the viewport, check Outliner and Transform (see `BLENDER_GUI.md`).
-3. Press **Enter** in the console to finish the render.
+Use forward slashes in paths on Linux and macOS.
+
+1. Blender opens on **Scripting** (empty viewport — expected).
+2. Click **Run BlenderProc**.
+3. Log prints `Inspect-only — scene ready in Layout`. Orbit the viewport; check Outliner and Transform (`lesson/BLENDER_GUI.md`).
+4. Close Blender when finished. Use `blenderproc run` when you need PNG labels, not debug.
 
 ### 8b — Environment `.blend` on its own
 
@@ -304,7 +314,7 @@ In the viewport:
 Import the OBJ into a fresh Blender session (**File → Import → Wavefront (.obj)**) or open via CLI:
 
 ```bash
-& "<path-to-blender>\blender.exe" --factory-startup assets\objects\tank\cn_ztz_99a\ztz_99a_0.obj
+/path/to/blender --factory-startup assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj
 ```
 
 Check real-world scale (properties panel) and that DDS textures loaded on the materials. This is the asset your labels refer to — segmentation is mask-derived from this mesh in the render.
@@ -336,7 +346,7 @@ Copy `lesson/worksheet.example.md` → `lesson/worksheet.md`.
 | Full scene | `blenderproc run scripts/render_demo.py` |
 | Draw boxes | `python scripts/visualize_yolo.py <image.png>` |
 | Self-check | `python scripts/lesson_check.py --help` |
-| Blender GUI | `blenderproc debug scripts/render_demo.py -- ... --pause-before-render` |
+| Blender inspect | `blenderproc debug scripts/render_demo.py -- --environment ... --tank ...` |
 | GUI walkthrough | `lesson/BLENDER_GUI.md` |
 
 Troubleshooting: `README.md`, `output/README.md`. Instructor notes: `lesson/INSTRUCTOR.md`.
