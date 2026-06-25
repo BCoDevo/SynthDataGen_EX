@@ -212,30 +212,37 @@ def pause_for_inspection(enabled: bool) -> None:
         print("(stdin closed — continuing without pause)")
 
 
-def _foreach_view3d_window(bpy, callback) -> None:
-    """Run a callable under each VIEW_3D region context override."""
+def _set_main_viewport_to_camera(cam_obj) -> bool:
+    """Point the largest 3D viewport through cam_obj (matches render framing)."""
+    import bpy
+
+    bpy.context.scene.camera = cam_obj
+    bpy.context.view_layer.update()
+
+    best_area = None
+    best_size = 0
     for window in bpy.context.window_manager.windows:
-        screen = window.screen
-        for area in screen.areas:
+        for area in window.screen.areas:
             if area.type != "VIEW_3D":
                 continue
-            for region in area.regions:
-                if region.type != "WINDOW":
-                    continue
-                with bpy.context.temp_override(
-                    window=window,
-                    screen=screen,
-                    area=area,
-                    region=region,
-                    scene=bpy.context.scene,
-                    view_layer=bpy.context.view_layer,
-                ):
-                    callback()
-                return
+            size = area.width * area.height
+            if size > best_size:
+                best_size = size
+                best_area = area
+
+    if best_area is None:
+        return False
+
+    space = best_area.spaces.active
+    region_3d = space.region_3d
+    region_3d.view_perspective = "CAMERA"
+    region_3d.view_matrix = cam_obj.matrix_world.inverted()
+    best_area.tag_redraw()
+    return True
 
 
 def finish_scene_inspection() -> None:
-    """Switch to Layout and show the active camera view (matches render framing)."""
+    """Switch to Layout and show the demo camera view (matches render framing)."""
     import bpy
 
     try:
@@ -243,19 +250,14 @@ def finish_scene_inspection() -> None:
     except (AttributeError, KeyError, TypeError):
         pass
 
+    bpy.context.view_layer.update()
+
     cam_obj = bpy.context.scene.camera
     if cam_obj is not None:
         bpy.ops.object.select_all(action="DESELECT")
         cam_obj.select_set(True)
         bpy.context.view_layer.objects.active = cam_obj
-
-        def _look_through_camera() -> None:
-            try:
-                bpy.ops.view3d.view_camera()
-            except RuntimeError:
-                pass
-
-        _foreach_view3d_window(bpy, _look_through_camera)
+        _set_main_viewport_to_camera(cam_obj)
 
     for window in bpy.context.window_manager.windows:
         for area in window.screen.areas:
@@ -264,7 +266,7 @@ def finish_scene_inspection() -> None:
     if cam_obj is not None:
         loc = cam_obj.matrix_world.translation
         print(
-            f"Inspect-only — viewport set to camera view ({loc.x:.1f}, {loc.y:.1f}, {loc.z:.1f}). "
+            f"Inspect-only — viewport set to {cam_obj.name} ({loc.x:.1f}, {loc.y:.1f}, {loc.z:.1f}). "
             "Same framing as a render would use."
         )
     else:
@@ -506,9 +508,11 @@ def render_segmentation_maps(tank_objs):
 
 def add_camera_for_tank(tank_objs, resolution, offset=None):
     """Frame the tank from above — auto-aim at its center (hides ground-gap better)."""
-    width, height = resolution
-    bproc.camera.set_resolution(width, height)
+    import bpy
+    from blenderproc.python.camera import CameraUtility
+    from mathutils import Matrix
 
+    width, height = resolution
     if offset is None:
         offset = DEFAULT_CAMERA_OFFSET
 
@@ -516,7 +520,30 @@ def add_camera_for_tank(tank_objs, resolution, offset=None):
     cam_location = poi + np.array(offset, dtype=float)
     rotation_matrix = bproc.camera.rotation_from_forward_vec(poi - cam_location)
     cam_pose = bproc.math.build_transformation_mat(cam_location, rotation_matrix)
-    bproc.camera.add_camera_pose(cam_pose)
+
+    # Use a fresh camera — the blend file's baked Camera can have parents/keyframes
+    # that break viewport inspection even when add_camera_pose updates matrix_world.
+    cam_name = "DemoCamera"
+    cam_obj = bpy.data.objects.get(cam_name)
+    if cam_obj is None:
+        cam_data = bpy.data.cameras.new(cam_name)
+        cam_obj = bpy.data.objects.new(cam_name, cam_data)
+        bpy.context.scene.collection.objects.link(cam_obj)
+
+    cam_obj.parent = None
+    bpy.context.scene.camera = cam_obj
+    cam_obj.matrix_world = Matrix(cam_pose.tolist())
+
+    bproc.camera.set_resolution(width, height)
+    CameraUtility.set_intrinsics_from_blender_params(
+        lens=50.0,
+        image_width=width,
+        image_height=height,
+        clip_start=0.05,
+        clip_end=500.0,
+        lens_unit="MILLIMETERS",
+    )
+    CameraUtility.add_camera_pose(cam_pose)
     print(f"Using demo camera at [{cam_location[0]:.1f}, {cam_location[1]:.1f}, {cam_location[2]:.1f}] (offset {offset})")
 
 
