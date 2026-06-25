@@ -212,8 +212,30 @@ def pause_for_inspection(enabled: bool) -> None:
         print("(stdin closed — continuing without pause)")
 
 
+def _foreach_view3d_window(bpy, callback) -> None:
+    """Run a callable under each VIEW_3D region context override."""
+    for window in bpy.context.window_manager.windows:
+        screen = window.screen
+        for area in screen.areas:
+            if area.type != "VIEW_3D":
+                continue
+            for region in area.regions:
+                if region.type != "WINDOW":
+                    continue
+                with bpy.context.temp_override(
+                    window=window,
+                    screen=screen,
+                    area=area,
+                    region=region,
+                    scene=bpy.context.scene,
+                    view_layer=bpy.context.view_layer,
+                ):
+                    callback()
+                return
+
+
 def finish_scene_inspection() -> None:
-    """Switch to Layout and redraw so the viewport shows the set-up scene (debug inspect mode)."""
+    """Switch to Layout and show the active camera view (matches render framing)."""
     import bpy
 
     try:
@@ -221,44 +243,33 @@ def finish_scene_inspection() -> None:
     except (AttributeError, KeyError, TypeError):
         pass
 
-    tank_obj = None
-    for obj in bpy.data.objects:
-        if obj.type == "MESH" and "ztz" in obj.name.lower():
-            tank_obj = obj
-            break
-
-    if tank_obj is not None:
+    cam_obj = bpy.context.scene.camera
+    if cam_obj is not None:
         bpy.ops.object.select_all(action="DESELECT")
-        tank_obj.select_set(True)
-        bpy.context.view_layer.objects.active = tank_obj
-        for window in bpy.context.window_manager.windows:
-            screen = window.screen
-            for area in screen.areas:
-                if area.type != "VIEW_3D":
-                    continue
-                for region in area.regions:
-                    if region.type != "WINDOW":
-                        continue
-                    with bpy.context.temp_override(
-                        window=window,
-                        screen=screen,
-                        area=area,
-                        region=region,
-                        scene=bpy.context.scene,
-                        view_layer=bpy.context.view_layer,
-                    ):
-                        try:
-                            bpy.ops.view3d.view_selected()
-                        except RuntimeError:
-                            pass
-                    break
+        cam_obj.select_set(True)
+        bpy.context.view_layer.objects.active = cam_obj
+
+        def _look_through_camera() -> None:
+            try:
+                bpy.ops.view3d.view_camera()
+            except RuntimeError:
+                pass
+
+        _foreach_view3d_window(bpy, _look_through_camera)
 
     for window in bpy.context.window_manager.windows:
         for area in window.screen.areas:
             area.tag_redraw()
 
-    print("Inspect-only — scene ready in Layout. Orbit the viewport and check the Outliner.")
-    print("Compare Object → Transform to your --tank-location / --camera-offset flags.")
+    if cam_obj is not None:
+        loc = cam_obj.matrix_world.translation
+        print(
+            f"Inspect-only — viewport set to camera view ({loc.x:.1f}, {loc.y:.1f}, {loc.z:.1f}). "
+            "Same framing as a render would use."
+        )
+    else:
+        print("Inspect-only — scene ready in Layout (no active camera found).")
+    print("Press Numpad 0 to toggle camera view. Compare to output/lesson_05/images/render.png.")
     print("Close Blender when finished (no render will run).")
 
 

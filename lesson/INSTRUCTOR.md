@@ -130,7 +130,7 @@ python scripts/export_hdf5_image.py output/lesson_05/0.hdf5 -o output/lesson_05/
 blenderproc debug scripts/render_demo.py -- --environment assets/environment/Scene_Morning.blend --hdr assets/environment/HDRs/spruit_sunrise_4k.hdr --tank assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj --tank-location 0 3 0.2 --camera-offset 10 -10 4
 ```
 
-Flow: Scripting → **Run BlenderProc** → Layout shows scene → inspect → close Blender. See `lesson/BLENDER_GUI.md`.
+Flow: Scripting → **Run BlenderProc** → Layout opens on **camera view** (matches lesson_05 render) → inspect → close Blender. See `lesson/BLENDER_GUI.md`.
 
 ---
 
@@ -160,7 +160,7 @@ Flow: Scripting → **Run BlenderProc** → Layout shows scene → inspect → c
 | 4 | Higher camera Z → more top-down; bbox size changes with perspective |
 | 5 | Texture relink + HDR sky; outdoor terrain vs studio |
 | 7 | HDF5 = pipeline archive; PNG = RGB preview + YOLO layout; `blenderproc vis hdf5` views without export |
-| 8 | Inspect-only in debug; Transform ≈ `--tank-location`; camera view ≈ lesson_05 PNG |
+| 8 | Inspect-only opens on camera view (Numpad 0); framing ≈ lesson_05 PNG; Transform ≈ `--tank-location` |
 
 ---
 

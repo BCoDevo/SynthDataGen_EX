@@ -280,7 +280,7 @@ Use forward slashes in paths on Linux and macOS.
 
 1. Blender opens on **Scripting** (empty viewport — expected).
 2. Click **Run BlenderProc**.
-3. Log prints `Inspect-only — scene ready in Layout`. Orbit the viewport; check Outliner and Transform (`lesson/BLENDER_GUI.md`).
+3. Log prints `Inspect-only — viewport set to camera view`. You should see the same framing as Exercise 5’s render (`lesson/BLENDER_GUI.md`). **Numpad 0** toggles camera view.
 4. Close Blender when finished. Use `blenderproc run` when you need PNG labels, not debug.
 
 ### 8b — Environment `.blend` on its own

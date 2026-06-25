@@ -20,8 +20,8 @@ Use forward slashes on all platforms. Run from the **repo root**.
 
 1. Blender opens on the **Scripting** workspace (scene is empty at first — expected).
 2. Click **Run BlenderProc** (toolbar above the text editor).
-3. Log prints: environment open, tank load, `Inspect-only — scene ready in Layout`.
-4. Blender switches to **Layout** and frames the tank. Orbit the viewport.
+3. Log prints: environment open, tank load, `Inspect-only — viewport set to camera view`.
+4. Blender switches to **Layout** and shows the **demo camera view** (same framing as `blenderproc run`). Press **Numpad 0** to toggle camera / orbit.
 
 The terminal stays attached until you **close Blender** — that is normal.
 
@@ -32,7 +32,7 @@ The terminal stays attached until you **close Blender** — that is normal.
 | **Outliner** | Tank mesh (`ztz_99a_0`); ~64 environment objects |
 | **3D Viewport** | Tank on terrain; HDR-lit scene |
 | **Properties → Object → Transform** | Location ≈ `(0, 3, 0.2)` per `--tank-location` |
-| **View → Cameras → Active Camera** / **Numpad 0** | Demo camera framing vs. Exercise 5 PNG |
+| **Numpad 0** | Toggles camera view — should match Exercise 5 `render.png` framing on load |
 
 **Navigate:** MMB orbit · Shift+MMB pan · scroll zoom · **Numpad .** frame selection
 
