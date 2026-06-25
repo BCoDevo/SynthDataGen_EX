@@ -58,11 +58,13 @@ Open `assets/README.md` and record these paths in `lesson/worksheet.md` (copy fr
 |------|------|
 | Tank mesh (intact) | `assets/objects/tank/cn_ztz_99a/____________` |
 | Environment scene | `assets/environment/____________________` |
-| Morning HDR sky | `assets/environment/HDRs/________________` |
+| HDR sky image | `assets/environment/HDRs/________________` |
 | Main render script | `scripts/________________` |
 
+**HDR** (High Dynamic Range) — a 360° environment image used for sky lighting in Exercise 5. The `.hdr` format stores a wide brightness range so sun and ground can light the scene realistically.
+
 **Question:** Why must `textures/` stay next to `ztz_99a_0.obj`?  
-*(Check `ztz_99a_0.mtl` — material paths are relative.)*
+*(Check `ztz_99a_0.mtl`)*
 
 ```bash
 python scripts/lesson_check.py paths --tank <tank-path> --environment <env-path> --hdr <hdr-path>
@@ -71,6 +73,14 @@ python scripts/lesson_check.py paths --tank <tank-path> --environment <env-path>
 ---
 
 ## Exercise 2 — First render (tank-only, fast settings)
+
+**Important:** BlenderProc requires `--` before script flags:
+
+```text
+blenderproc run scripts/render_demo.py -- --tank-only ...
+```
+
+Without `--`, flags may be swallowed and textures/HDR paths can fail to resolve.
 
 Before running:
 
@@ -130,7 +140,7 @@ blenderproc run scripts/render_demo.py -- \
   --tank-location <X> <Y> <Z> \
   --resolution 640 360 \
   --samples 16 \
-  --output output/lesson_03a
+  --output output/lesson_03
 ```
 
 Note whether the tank clips, floats, or shifts in frame. Labels update automatically when YOLO export is enabled.
@@ -191,7 +201,7 @@ blenderproc run scripts/render_demo.py -- \
 While rendering, read the log:
 
 - `Relinked N environment texture(s)` — broken paths from the author's machine are remapped to `assets/environment/Textures/`
-- `Sky lighting: ...` — HDR world background; the blend has no scene lamps
+- `Sky lighting: ...` — **HDR** (High Dynamic Range) world background; the blend has no scene lamps
 
 ```bash
 python scripts/lesson_check.py render --output output/lesson_05
@@ -240,11 +250,11 @@ Why does the pipeline write both HDF5 and PNG?
 
 ## Exercise 8 — Inspect assets in Blender (capstone)
 
-Connect CLI parameters to the underlying 3D data.
+Connect CLI parameters to the underlying 3D data. Step-by-step viewport guide: **`lesson/BLENDER_GUI.md`**.
 
-### 8a — Pipeline view (`blenderproc debug`)
+### 8a — Pipeline view (`blenderproc debug` + pause)
 
-Opens the same Blender build used by your renders:
+Opens the same Blender build used by your renders. `--pause-before-render` stops after scene setup so you can inspect before Cycles runs:
 
 ```bash
 blenderproc debug scripts/render_demo.py -- \
@@ -252,17 +262,16 @@ blenderproc debug scripts/render_demo.py -- \
   --hdr <hdr-path> \
   --tank <tank-path> \
   --tank-location 0 3 0.2 \
+  --camera-offset 10 -10 4 \
   --resolution 640 360 \
   --samples 4 \
+  --pause-before-render \
   --output output/lesson_08
 ```
 
-In Blender:
-
-1. **Scripting** workspace → run the script (BlenderProc play button).
-2. **Layout** workspace → **Outliner**: locate the tank mesh and environment objects.
-3. Select the tank → **Object Properties → Transform**. Compare Location to `--tank-location`.
-4. Select **View → Cameras → Active Camera** (or select the camera object). Compare framing to your `--camera-offset` experiments.
+1. **Scripting** → Run BlenderProc.
+2. When the console prints **Pause before render**, switch to **Layout** — orbit the viewport, check Outliner and Transform (see `BLENDER_GUI.md`).
+3. Press **Enter** in the console to finish the render.
 
 ### 8b — Environment `.blend` on its own
 
@@ -327,6 +336,7 @@ Copy `lesson/worksheet.example.md` → `lesson/worksheet.md`.
 | Full scene | `blenderproc run scripts/render_demo.py` |
 | Draw boxes | `python scripts/visualize_yolo.py <image.png>` |
 | Self-check | `python scripts/lesson_check.py --help` |
-| Blender GUI | `blenderproc debug scripts/render_demo.py -- <same flags as run>` |
+| Blender GUI | `blenderproc debug scripts/render_demo.py -- ... --pause-before-render` |
+| GUI walkthrough | `lesson/BLENDER_GUI.md` |
 
 Troubleshooting: `README.md`, `output/README.md`. Instructor notes: `lesson/INSTRUCTOR.md`.

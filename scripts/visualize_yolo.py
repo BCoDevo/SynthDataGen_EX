@@ -19,6 +19,13 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT = PROJECT_ROOT / "output"
 
 
+def infer_dataset_root(image_path: Path) -> Path:
+    """YOLO layout: <root>/images/<stem>.png with labels/classes alongside."""
+    if image_path.parent.name == "images":
+        return image_path.parent.parent
+    return image_path.parent
+
+
 def resolve_latest_render_image(output_dir: Path) -> Path:
     """Pick the newest render PNG (output/render.png or output/images/render.png)."""
     candidates = [
@@ -92,13 +99,17 @@ def main():
     if not image_path.exists():
         raise FileNotFoundError(image_path)
 
+    dataset_root = infer_dataset_root(image_path)
+
     label_path = args.labels
     if label_path is None:
-        label_path = image_path.parent.parent / "labels" / f"{image_path.stem}.txt"
+        label_path = dataset_root / "labels" / f"{image_path.stem}.txt"
         if not label_path.exists():
             label_path = args.output_dir / "labels" / f"{image_path.stem}.txt"
 
-    classes_path = args.classes or args.output_dir / "classes.txt"
+    classes_path = args.classes or dataset_root / "classes.txt"
+    if not classes_path.exists():
+        classes_path = args.output_dir / "classes.txt"
     class_names = []
     if classes_path.exists():
         class_names = [ln.strip() for ln in classes_path.read_text(encoding="utf-8").splitlines() if ln.strip()]

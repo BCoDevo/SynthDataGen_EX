@@ -5,6 +5,7 @@ import blenderproc as bproc
 # Tank-only preview:      blenderproc run scripts/render_demo.py -- --tank-only
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -56,14 +57,68 @@ TEXTURE_FALLBACKS = {
 }
 
 
+def resolve_project_path(path: Path) -> Path:
+    """Resolve CLI paths against the repo root so Blender finds textures/HDRs."""
+    path = Path(path)
+    if path.is_absolute():
+        return path.resolve()
+    return (PROJECT_ROOT / path).resolve()
+
+
+def relink_tank_textures(tank_obj_path: Path) -> int:
+    """Point tank material images at files under <tank>/textures/."""
+    import bpy
+
+    tex_dir = tank_obj_path.parent / "textures"
+    if not tex_dir.is_dir():
+        return 0
+
+    index = {p.name.lower(): p for p in tex_dir.iterdir() if p.is_file()}
+    fixed = 0
+    for image in bpy.data.images:
+        if image.packed_file:
+            continue
+        keys = []
+        if image.filepath:
+            keys.append(Path(bpy.path.abspath(image.filepath)).name.lower())
+        keys.append(image.name.lower())
+        resolved = None
+        for key in keys:
+            if key in index:
+                resolved = index[key]
+                break
+        if resolved is None:
+            continue
+        image.filepath = str(resolved)
+        image.reload()
+        fixed += 1
+    return fixed
+
+
 def load_mesh_asset(path: Path):
     """Load a mesh from .blend, .obj, or .ply."""
+    path = resolve_project_path(path)
     suffix = path.suffix.lower()
     if suffix == ".blend":
         return bproc.loader.load_blend(str(path))
     if suffix in (".obj", ".ply"):
-        return bproc.loader.load_obj(str(path))
+        objs = bproc.loader.load_obj(str(path))
+        fixed = relink_tank_textures(path)
+        if fixed:
+            print(f"Relinked {fixed} tank texture(s) from {path.parent / 'textures'}")
+        return objs
     raise ValueError(f"Unsupported mesh format: {path}")
+
+
+def pause_for_inspection(enabled: bool) -> None:
+    """Optional hold before the Cycles render so debug sessions can inspect the scene."""
+    if not enabled:
+        return
+    print("Pause before render — inspect the scene in Blender, then press Enter to continue.")
+    try:
+        input()
+    except EOFError:
+        print("(stdin closed — continuing without pause)")
 
 
 def _build_texture_index(env_dir: Path) -> dict[str, Path]:
@@ -400,11 +455,21 @@ def parse_args():
         default=DEFAULT_ENVIRONMENT_ROTATION_Z,
         help=f"Rotate environment on Z (degrees) around tank pivot (default: {DEFAULT_ENVIRONMENT_ROTATION_Z})",
     )
+    parser.add_argument(
+        "--pause-before-render",
+        action="store_true",
+        help="Wait for Enter after scene setup (use with blenderproc debug to inspect first)",
+    )
     return parser.parse_args()
 
 
 def main():
+    os.chdir(PROJECT_ROOT)
     args = parse_args()
+    args.tank = resolve_project_path(args.tank)
+    args.environment = resolve_project_path(args.environment)
+    args.hdr = resolve_project_path(args.hdr)
+    args.output = resolve_project_path(args.output)
 
     if not args.tank.exists():
         raise FileNotFoundError(
@@ -460,6 +525,8 @@ def main():
             args.resolution,
             offset=args.camera_offset,
         )
+
+    pause_for_inspection(args.pause_before_render)
 
     width, height = args.resolution
     print(f"Rendering {width}x{height} ...")
