@@ -56,10 +56,10 @@ Open `assets/README.md` and record these paths in `lesson/worksheet.md` (copy fr
 
 | What | Path |
 |------|------|
-| Tank mesh (intact) | `assets/objects/tank/cn_ztz_99a/____________` |
-| Environment scene | `assets/environment/____________________` |
-| HDR sky image | `assets/environment/HDRs/________________` |
-| Main render script | `scripts/________________` |
+| Tank mesh (intact) | `assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj` |
+| Environment scene | `assets/environment/Scene_Morning.blend` |
+| HDR sky image | `assets/environment/HDRs/spruit_sunrise_4k.hdr` |
+| Main render script | `scripts/render_demo.py` |
 
 **HDR** (High Dynamic Range) — a 360° environment image used for sky lighting in Exercise 5. The `.hdr` format stores a wide brightness range so sun and ground can light the scene realistically.
 
@@ -67,7 +67,7 @@ Open `assets/README.md` and record these paths in `lesson/worksheet.md` (copy fr
 *(Check `ztz_99a_0.mtl`)*
 
 ```bash
-python scripts/lesson_check.py paths --tank <tank-path> --environment <env-path> --hdr <hdr-path>
+python scripts/lesson_check.py paths --tank assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj --environment assets/environment/Scene_Morning.blend --hdr assets/environment/HDRs/spruit_sunrise_4k.hdr
 ```
 
 ---
@@ -85,17 +85,6 @@ Without `--`, flags may be swallowed and textures/HDR paths can fail to resolve.
 **PowerShell:** use a **backtick** `` ` `` for line breaks, not `\` (which bash uses). Or put the command on one line:
 
 ```powershell
-# Multi-line (PowerShell)
-blenderproc run scripts/render_demo.py -- `
-  --tank-only `
-  --tank assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj `
-  --resolution 640 360 `
-  --samples 16 `
-  --output output/lesson_02
-```
-
-```powershell
-# Single line — works everywhere
 blenderproc run scripts/render_demo.py -- --tank-only --tank assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj --resolution 640 360 --samples 16 --output output/lesson_02
 ```
 
@@ -107,7 +96,7 @@ Before running:
 ```bash
 blenderproc run scripts/render_demo.py -- \
   --tank-only \
-  --tank <tank-path> \
+  --tank assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj \
   --resolution 640 360 \
   --samples 16 \
   --output output/lesson_02
@@ -144,20 +133,20 @@ Blender is **Z-up**. Default placement: `[0, 3, 0.2]` as `(x, y, z)`.
 
 Run three variants with separate output folders:
 
-| Run | `--tank-location` | Expected effect |
-|-----|-------------------|-----------------|
-| A | `0 3 0.2` | baseline |
-| B | `0 3 0.8` | raised — float or sit higher? |
-| C | `5 3 0.2` | shifted in X |
+| Run | `--tank-location` | Output folder |
+|-----|-------------------|---------------|
+| A | `0 3 0.2` | `output/lesson_03a` |
+| B | `0 3 0.8` | `output/lesson_03b` |
+| C | `5 3 0.2` | `output/lesson_03c` |
 
 ```bash
 blenderproc run scripts/render_demo.py -- \
   --tank-only \
-  --tank <tank-path> \
-  --tank-location <X> <Y> <Z> \
+  --tank assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj \
+  --tank-location 0 3 0.8 \
   --resolution 640 360 \
   --samples 16 \
-  --output output/lesson_03
+  --output output/lesson_03b
 ```
 
 Note whether the tank clips, floats, or shifts in frame. Labels update automatically when YOLO export is enabled.
@@ -177,9 +166,9 @@ Run two renders — same tank location, different offsets:
 ```bash
 blenderproc run scripts/render_demo.py -- \
   --tank-only \
-  --tank <tank-path> \
+  --tank assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj \
   --tank-location 0 3 0.2 \
-  --camera-offset <X1> <Y1> <Z1> \
+  --camera-offset 10 0 4 \
   --resolution 640 360 \
   --samples 16 \
   --output output/lesson_04a
@@ -188,36 +177,37 @@ blenderproc run scripts/render_demo.py -- \
 ```bash
 blenderproc run scripts/render_demo.py -- \
   --tank-only \
-  --tank <tank-path> \
+  --tank assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj \
   --tank-location 0 3 0.2 \
-  --camera-offset <X2> <Y2> <Z2> \
+  --camera-offset 0 -10 4 \
   --resolution 640 360 \
   --samples 16 \
   --output output/lesson_04b
 ```
 
-Which offset is more top-down? How does perspective affect the bounding box in `render.txt`?
+How does camera position around the tank change framing? How does perspective affect the bounding box in `render.txt`?
 
 ---
 
 ## Exercise 5 — Full environment
 
-Use explicit paths for all inputs:
+Use explicit paths for all inputs. **`--export-seg`** adds segmentation previews and merges `instance_segmaps` into HDF5 (used in Exercise 7):
 
 ```bash
 blenderproc run scripts/render_demo.py -- \
-  --environment <env-path> \
-  --hdr <hdr-path> \
-  --tank <tank-path> \
+  --environment assets/environment/Scene_Morning.blend \
+  --hdr assets/environment/HDRs/spruit_sunrise_4k.hdr \
+  --tank assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj \
   --tank-location 0 3 0.2 \
   --resolution 1280 720 \
   --samples 32 \
+  --export-seg \
   --output output/lesson_05
 ```
 
 While rendering, read the log:
 
-- `Sky lighting: ...` — **HDR** (High Dynamic Range) world background; the blend has no scene lamps
+- `Sky lighting: ...` — **HDR** world background; the blend has no scene lamps
 
 ```bash
 python scripts/lesson_check.py render --output output/lesson_05
@@ -226,11 +216,13 @@ python scripts/visualize_yolo.py output/lesson_05/images/render.png
 
 Compare `lesson_02` vs `lesson_05` — note two visual differences (lighting, terrain, clutter, etc.).
 
+Open `images/render_seg_overlay.png` (green mask = pixels the YOLO box is fit from). Only `lesson_05` includes seg exports — earlier exercises stay minimal.
+
 ---
 
 ## Exercise 6 — Parameter experiment
 
-Pick one flag from `--help` and run a comparison render:
+Pick one flag from `--help` and run a comparison render (no `--export-seg` unless you want a second full-scene folder):
 
 ```bash
 blenderproc run scripts/render_demo.py -- --help
@@ -244,82 +236,64 @@ blenderproc run scripts/render_demo.py -- --help
 | Skip labels | `--no-yolo` |
 | Higher quality | `--samples` |
 
+Example — brighter HDR:
+
+```bash
+blenderproc run scripts/render_demo.py -- \
+  --environment assets/environment/Scene_Morning.blend \
+  --hdr assets/environment/HDRs/spruit_sunrise_4k.hdr \
+  --tank assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj \
+  --tank-location 0 3 0.2 \
+  --hdr-strength 2.0 \
+  --resolution 640 360 \
+  --samples 16 \
+  --output output/lesson_06_hdr
+```
+
 Record the parameter, value, and observable change in your worksheet.
 
 ---
 
 ## Exercise 7 — HDF5 export
 
+Uses **`output/lesson_05`** from Exercise 5 (`--export-seg`).
+
 ```bash
 python scripts/export_hdf5_image.py output/lesson_05/0.hdf5 -o output/lesson_05/from_hdf5.png
 ```
 
-Confirm `from_hdf5.png` matches `render.png`. Optional:
+Confirm `from_hdf5.png` matches `render.png`.
 
 ```bash
 python -c "import h5py; f=h5py.File('output/lesson_05/0.hdf5'); print(list(f.keys())); print(f['colors'].shape)"
+```
+
+Expect keys like `colors` and `instance_segmaps`. View in BlenderProc’s viewer:
+
+```bash
+blenderproc vis hdf5 output/lesson_05/0.hdf5
 ```
 
 Why does the pipeline write both HDF5 and PNG?
 
 ---
 
-## Exercise 8 — Inspect assets in Blender (capstone)
+## Exercise 8 — See the 3D scene (live demo)
 
-Connect CLI parameters to the underlying 3D data. Step-by-step viewport guide: **`lesson/BLENDER_GUI.md`**.
+**Instructor-led** — not a Blender skills lab. Watch the live demo: the same CLI flags from Exercises 3–5 show up as objects, transforms, and materials in Blender. You are not expected to navigate Blender on your own; use YouTube or Blender docs if you want to go deeper later.
 
-### 8a — Pipeline view (`blenderproc debug`)
+**Instructor script:** `lesson/BLENDER_GUI.md`
 
-Opens the same Blender build used by your renders. **Debug defaults to inspect-only** — scene setup runs, no Cycles render, Blender stays open until you close it.
+While you watch, note how these connect:
 
-```bash
-blenderproc debug scripts/render_demo.py -- --environment <env-path> --hdr <hdr-path> --tank <tank-path> --tank-location 0 3 0.2 --camera-offset 10 -10 4
-```
+| CLI flag | What you should see in Blender |
+|----------|--------------------------------|
+| `--tank` | Tank mesh in the Outliner — the object being labeled |
+| `--tank-location` | Object transform location on the ground |
+| `--camera-offset` | Demo camera framing (vs. the blend’s baked scene camera) |
+| Environment + HDR | Outdoor terrain and lighting (not the studio plane from Exercise 2) |
 
-Use forward slashes in paths on Linux and macOS.
-
-1. Blender opens on **Scripting** (empty viewport — expected).
-2. Click **Run BlenderProc**.
-3. Log prints `Inspect-only — viewport set to camera view`. You should see the same framing as Exercise 5’s render (`lesson/BLENDER_GUI.md`). **Numpad 0** toggles camera view.
-4. Close Blender when finished. Use `blenderproc run` when you need PNG labels, not debug.
-
-### 8b — Environment `.blend` on its own
-
-Open the scene file directly. Your first `blenderproc run` log prints the Blender path, e.g.:
-
-```
-Using blender in C:\Users\...\blender-4.2.1-windows-x64\...
-```
-
-Launch that `blender.exe` with the environment file (adjust path from your log):
-
-```bash
-# Windows example
-& "<path-to-blender>\blender.exe" assets\environment\Scene_Morning.blend
-```
-
-```bash
-# macOS / Linux example
-"<path-to-blender>/blender" assets/environment/Scene_Morning.blend
-```
-
-In the viewport:
-
-1. Find the scene camera object — how does its angle differ from the demo camera?
-2. Navigate to roughly `[0, 3, 0]` on the ground — this is where the script places the tank pivot.
-3. **Shading** workspace on terrain: note how materials reference texture files under `assets/environment/Textures/`.
-
-### 8c — Tank mesh on its own
-
-Import the OBJ into a fresh Blender session (**File → Import → Wavefront (.obj)**) or open via CLI:
-
-```bash
-/path/to/blender --factory-startup assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj
-```
-
-Check real-world scale (properties panel) and that DDS textures loaded on the materials. This is the asset your labels refer to — segmentation is mask-derived from this mesh in the render.
-
-**Worksheet:** Sketch or describe one thing you saw in Blender that the CLI log alone does not make obvious.
+**Worksheet:** Describe one thing visible in the live demo that the terminal log alone does not make obvious.
 
 ---
 
@@ -328,7 +302,7 @@ Check real-world scale (properties panel) and that DDS textures loaded on the ma
 1. What is *synthetic* about this data vs. a real photograph?
 2. What breaks if `--tank-location` Z is too low in the full environment?
 3. Would a model trained only on `lesson_02` generalize to `lesson_05`? What would you randomize across 1000 images?
-4. After Exercise 8 — how does inspecting the `.blend` change how you would set `--camera-offset` or `--env-rotation`?
+4. After Exercise 8 — what did the live demo clarify about `--camera-offset` or `--env-rotation`?
 
 ---
 
@@ -342,11 +316,11 @@ Copy `lesson/worksheet.example.md` → `lesson/worksheet.md`.
 
 | Task | Command |
 |------|---------|
-| Fast preview | `blenderproc run scripts/render_demo.py -- --tank-only --resolution 640 360 --samples 16` |
-| Full scene | `blenderproc run scripts/render_demo.py` |
-| Draw boxes | `python scripts/visualize_yolo.py <image.png>` |
+| Fast preview | `blenderproc run scripts/render_demo.py -- --tank-only --tank assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj --resolution 640 360 --samples 16 --output output/lesson_02` |
+| Full scene + seg | `blenderproc run scripts/render_demo.py -- --environment assets/environment/Scene_Morning.blend --hdr assets/environment/HDRs/spruit_sunrise_4k.hdr --tank assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj --tank-location 0 3 0.2 --resolution 1280 720 --samples 32 --export-seg --output output/lesson_05` |
+| Draw boxes | `python scripts/visualize_yolo.py output/lesson_05/images/render.png` |
+| HDF5 viewer | `blenderproc vis hdf5 output/lesson_05/0.hdf5` |
 | Self-check | `python scripts/lesson_check.py --help` |
-| Blender inspect | `blenderproc debug scripts/render_demo.py -- --environment ... --tank ...` |
-| GUI walkthrough | `lesson/BLENDER_GUI.md` |
+| Live Blender demo (instructor) | `lesson/BLENDER_GUI.md` |
 
 Troubleshooting: `README.md`, `output/README.md`. Instructor notes: `lesson/INSTRUCTOR.md`.

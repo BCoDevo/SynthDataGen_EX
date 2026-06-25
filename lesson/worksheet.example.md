@@ -31,8 +31,11 @@
 - Value: 
 - Change: 
 
-## Exercise 8 — Blender inspection
-- One thing visible in GUI but not obvious from CLI: 
+## Exercise 7 — HDF5
+- Keys in `0.hdf5`:
+
+## Exercise 8 — live demo
+- One CLI ↔ scene connection from the demo:
 
 ## Wrap-up
 1. 

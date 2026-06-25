@@ -45,7 +45,12 @@ def _resolve_script_dir() -> Path:
 SCRIPT_DIR = _resolve_script_dir()
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
-from yolo_writer import DEFAULT_CLASS_NAMES, write_yolo_dataset
+from yolo_writer import (
+    DEFAULT_CLASS_NAMES,
+    export_segmentation_previews,
+    write_yolo_dataset,
+    write_yolo_multi_frame,
+)
 
 PROJECT_ROOT = SCRIPT_DIR.parent
 ENVIRONMENT_DIR = PROJECT_ROOT / "assets" / "environment"
@@ -65,6 +70,11 @@ DEFAULT_SAMPLES = 128
 
 # Demo camera: offset from tank center of interest (same as tank-only preview — more top-down)
 DEFAULT_CAMERA_OFFSET = [10.0, -10.0, 4.0]
+
+# Orbit camera (--views > 1): distance is a multiplier of the tank bounding radius
+DEFAULT_ORBIT_CAMERA_DISTANCE = 3.0
+DEFAULT_ORBIT_CAMERA_ELEVATION = 0.35
+DEFAULT_ORBIT_AZIMUTH_JITTER = 0.0
 
 # Rotate environment (deg Z) so authored scene framing faces the demo camera
 DEFAULT_ENVIRONMENT_ROTATION_Z = 45.9
@@ -271,7 +281,6 @@ def finish_scene_inspection() -> None:
         )
     else:
         print("Inspect-only — scene ready in Layout (no active camera found).")
-    print("Press Numpad 0 to toggle camera view. Compare to output/lesson_05/images/render.png.")
     print("Close Blender when finished (no render will run).")
 
 
@@ -383,11 +392,11 @@ def open_environment_blend(path: Path) -> None:
     # init() ran first; reopening the .blend resets engine/settings.
     configure_renderer()
 
-    # Scene file carries a long timeline — demo only needs one still frame.
-    bpy.context.scene.frame_start = 1
-    bpy.context.scene.frame_end = 1
-    bpy.context.scene.frame_set(1)
+    # Clear authored keyframes first — reset_keyframes() also resets frame_start/end to 0.
     reset_keyframes()
+    bpy.context.scene.frame_start = 0
+    bpy.context.scene.frame_end = 0
+    bpy.context.scene.frame_set(0)
 
 
 def apply_sky_lighting(hdr_path: Path, strength: float = 1.2) -> None:
@@ -453,7 +462,7 @@ def register_scene_camera(resolution, camera_name: str = DEFAULT_SCENE_CAMERA):
         lens_unit=cam_data.lens_unit,
     )
 
-    bproc.camera.add_camera_pose(cam_obj.matrix_world)
+    bproc.camera.add_camera_pose(cam_obj.matrix_world, frame=0)
     print(f"Using scene camera: {cam_obj.name} ({width}x{height}, {cam_data.lens} mm)")
 
 
@@ -506,23 +515,41 @@ def render_segmentation_maps(tank_objs):
         _restore_displaced_meshes(displaced)
 
 
-def add_camera_for_tank(tank_objs, resolution, offset=None):
-    """Frame the tank from above — auto-aim at its center (hides ground-gap better)."""
+def tank_scene_bounds(tank_objs) -> tuple[np.ndarray, float]:
+    """Return tank center and bounding radius for orbit camera placement."""
+    bounds = np.concatenate([obj.get_bound_box() for obj in tank_objs], axis=0)
+    center = (bounds.min(axis=0) + bounds.max(axis=0)) * 0.5
+    radius = float(np.linalg.norm(bounds.max(axis=0) - bounds.min(axis=0)) * 0.5)
+    return center, radius
+
+
+def frame_orbit_camera(
+    center: np.ndarray,
+    radius: float,
+    view_index: int,
+    view_count: int,
+    camera_distance: float,
+    camera_elevation: float,
+    azimuth_jitter_deg: float = 0.0,
+) -> np.ndarray:
+    """Build a camera pose on an orbit ring around the tank (production-style multi-view)."""
+    base_angle = np.deg2rad(-60.0)
+    angle = base_angle + (2.0 * np.pi * view_index / view_count) + np.deg2rad(azimuth_jitter_deg)
+    view_direction = np.array([np.cos(angle), np.sin(angle), camera_elevation], dtype=float)
+    view_direction /= np.linalg.norm(view_direction)
+
+    location = center + view_direction * radius * camera_distance
+    target = center + np.array([0.0, 0.0, radius * 0.08], dtype=float)
+    rotation = bproc.camera.rotation_from_forward_vec(target - location)
+    return bproc.math.build_transformation_mat(location, rotation)
+
+
+def ensure_demo_camera(resolution):
+    """Create or reuse DemoCamera with demo lens/intrinsics."""
     import bpy
     from blenderproc.python.camera import CameraUtility
-    from mathutils import Matrix
 
     width, height = resolution
-    if offset is None:
-        offset = DEFAULT_CAMERA_OFFSET
-
-    poi = bproc.object.compute_poi(tank_objs)
-    cam_location = poi + np.array(offset, dtype=float)
-    rotation_matrix = bproc.camera.rotation_from_forward_vec(poi - cam_location)
-    cam_pose = bproc.math.build_transformation_mat(cam_location, rotation_matrix)
-
-    # Use a fresh camera — the blend file's baked Camera can have parents/keyframes
-    # that break viewport inspection even when add_camera_pose updates matrix_world.
     cam_name = "DemoCamera"
     cam_obj = bpy.data.objects.get(cam_name)
     if cam_obj is None:
@@ -532,7 +559,6 @@ def add_camera_for_tank(tank_objs, resolution, offset=None):
 
     cam_obj.parent = None
     bpy.context.scene.camera = cam_obj
-    cam_obj.matrix_world = Matrix(cam_pose.tolist())
 
     bproc.camera.set_resolution(width, height)
     CameraUtility.set_intrinsics_from_blender_params(
@@ -543,8 +569,83 @@ def add_camera_for_tank(tank_objs, resolution, offset=None):
         clip_end=500.0,
         lens_unit="MILLIMETERS",
     )
-    CameraUtility.add_camera_pose(cam_pose)
+    return cam_obj
+
+
+def add_camera_for_tank(tank_objs, resolution, offset=None):
+    """Frame the tank from above — auto-aim at its center (hides ground-gap better)."""
+    from mathutils import Matrix
+
+    if offset is None:
+        offset = DEFAULT_CAMERA_OFFSET
+
+    poi = bproc.object.compute_poi(tank_objs)
+    cam_location = poi + np.array(offset, dtype=float)
+    rotation_matrix = bproc.camera.rotation_from_forward_vec(poi - cam_location)
+    cam_pose = bproc.math.build_transformation_mat(cam_location, rotation_matrix)
+
+    cam_obj = ensure_demo_camera(resolution)
+    cam_obj.matrix_world = Matrix(cam_pose.tolist())
+    bproc.camera.add_camera_pose(cam_pose, frame=0)
     print(f"Using demo camera at [{cam_location[0]:.1f}, {cam_location[1]:.1f}, {cam_location[2]:.1f}] (offset {offset})")
+
+
+def add_orbit_cameras_for_tank(
+    tank_objs,
+    resolution,
+    views: int,
+    camera_distance: float,
+    camera_elevation: float,
+    azimuth_jitter_max: float,
+    rng: np.random.Generator,
+):
+    """Register N orbit camera poses — one Blender keyframe per view."""
+    import bpy
+
+    ensure_demo_camera(resolution)
+    center, radius = tank_scene_bounds(tank_objs)
+
+    bpy.context.scene.frame_start = 0
+    for view_index in range(views):
+        jitter = float(rng.uniform(-azimuth_jitter_max, azimuth_jitter_max)) if azimuth_jitter_max > 0 else 0.0
+        cam_pose = frame_orbit_camera(
+            center,
+            radius,
+            view_index,
+            views,
+            camera_distance,
+            camera_elevation,
+            jitter,
+        )
+        bproc.camera.add_camera_pose(cam_pose, frame=view_index)
+        loc = cam_pose[:3, 3]
+        print(
+            f"Orbit view {view_index + 1}/{views}: "
+            f"distance={camera_distance:.2f}×r elevation={camera_elevation:.2f} "
+            f"jitter={jitter:.1f}° at [{loc[0]:.1f}, {loc[1]:.1f}, {loc[2]:.1f}]"
+        )
+
+
+def finalize_render_timeline(view_count: int) -> None:
+    """Align Blender timeline so BlenderProc writes 0.hdf5 … (view_count-1).hdf5."""
+    import bpy
+
+    bpy.context.scene.frame_start = 0
+    bpy.context.scene.frame_end = view_count
+
+
+def frame_image_stems(frame_count: int, *, multi_view: bool) -> list[str]:
+    """Stable image/label stems: single-view keeps 'render'; multi-view uses frame_NNN."""
+    if not multi_view:
+        return ["render"]
+    return [f"frame_{index:03d}" for index in range(frame_count)]
+
+
+def normalize_render_list(values) -> list:
+    """BlenderProc returns a single array for one frame and a list for many."""
+    if isinstance(values, list):
+        return values
+    return [values]
 
 
 def parse_args():
@@ -629,6 +730,12 @@ def parse_args():
         help="Export YOLO detection labels (default: on)",
     )
     parser.add_argument(
+        "--export-seg",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Seg PNGs + instance_segmaps in HDF5 (lesson_05 / Exercise 7; default: off)",
+    )
+    parser.add_argument(
         "--env-rotation",
         type=float,
         default=DEFAULT_ENVIRONMENT_ROTATION_Z,
@@ -649,6 +756,36 @@ def parse_args():
         action="store_true",
         help="Render in blenderproc debug (default debug mode is --inspect-only)",
     )
+    parser.add_argument(
+        "--views",
+        type=int,
+        default=1,
+        help="Number of orbit camera views / output frames (default: 1). Extra credit: scale to a small dataset.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed for per-view azimuth jitter when --views > 1",
+    )
+    parser.add_argument(
+        "--camera-distance",
+        type=float,
+        default=DEFAULT_ORBIT_CAMERA_DISTANCE,
+        help="Orbit standoff as a multiplier of tank bounding radius (--views > 1)",
+    )
+    parser.add_argument(
+        "--camera-elevation",
+        type=float,
+        default=DEFAULT_ORBIT_CAMERA_ELEVATION,
+        help="Orbit elevation mix-in; larger values look more top-down (--views > 1)",
+    )
+    parser.add_argument(
+        "--camera-azimuth-jitter",
+        type=float,
+        default=DEFAULT_ORBIT_AZIMUTH_JITTER,
+        help="Max random azimuth jitter in degrees per orbit view (--views > 1)",
+    )
     return parser.parse_args()
 
 
@@ -665,6 +802,12 @@ def main():
             f"Tank asset not found: {args.tank}\n"
             "Expected bundled asset at assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj"
         )
+    if args.views < 1:
+        raise ValueError("--views must be at least 1")
+    if args.camera_distance <= 0:
+        raise ValueError("--camera-distance must be greater than 0")
+    if args.camera_azimuth_jitter < 0:
+        raise ValueError("--camera-azimuth-jitter must be zero or greater")
 
     inspect_only = args.inspect_only or (is_blenderproc_debug() and not args.force_render)
 
@@ -719,7 +862,23 @@ def main():
             pivot=list(args.tank_location),
         )
 
-    if args.use_scene_camera:
+    orbit_views = 1 if inspect_only else args.views
+    if args.views > 1:
+        if args.use_scene_camera:
+            print("Note: --use-scene-camera ignored when --views > 1; using orbit camera.")
+        if inspect_only and args.views > 1:
+            print(f"Inspect-only: showing first of {args.views} planned orbit views.")
+        rng = np.random.default_rng(args.seed)
+        add_orbit_cameras_for_tank(
+            tank_objs,
+            args.resolution,
+            views=orbit_views,
+            camera_distance=args.camera_distance,
+            camera_elevation=args.camera_elevation,
+            azimuth_jitter_max=args.camera_azimuth_jitter,
+            rng=rng,
+        )
+    elif args.use_scene_camera:
         register_scene_camera(resolution=args.resolution)
     else:
         add_camera_for_tank(
@@ -734,48 +893,97 @@ def main():
 
     pause_for_inspection(args.pause_before_render)
 
+    view_count = args.views if args.views > 1 else 1
+    multi_view = args.views > 1
+    finalize_render_timeline(view_count)
+
     width, height = args.resolution
-    print(f"Rendering {width}x{height} ...")
+    frame_label = f"{args.views} view(s)" if multi_view else "1 view"
+    print(f"Rendering {width}x{height}, {frame_label} ...")
     data = bproc.renderer.render()
 
     args.output.mkdir(parents=True, exist_ok=True)
     bproc.writer.write_hdf5(str(args.output), data)
 
-    rgb = data["colors"][0]
-    png_path = args.output / "render.png"
-    save_png(png_path, rgb)
+    colors = normalize_render_list(data["colors"])
+    if not multi_view and len(colors) > 1:
+        print(f"Note: timeline produced {len(colors)} frames; using first frame for single-view output.")
+        colors = colors[:1]
 
+    stems = frame_image_stems(len(colors), multi_view=multi_view)
     images_dir = args.output / "images"
     images_dir.mkdir(parents=True, exist_ok=True)
-    yolo_image_path = images_dir / "render.png"
-    save_png(yolo_image_path, rgb)
 
-    label_path = None
+    for rgb, stem in zip(colors, stems):
+        save_png(images_dir / f"{stem}.png", rgb)
+    save_png(args.output / "render.png", colors[0])
+
+    label_paths: list[Path] = []
     if args.yolo:
         print("Rendering instance segmentation for YOLO labels ...")
+        finalize_render_timeline(view_count)
         seg_data = render_segmentation_maps(tank_objs)
-        inst_segmap = seg_data["instance_segmaps"]
-        inst_attrs = seg_data["instance_attribute_maps"]
-        if isinstance(inst_segmap, list):
-            inst_segmap = inst_segmap[0]
-            inst_attrs = inst_attrs[0]
+        inst_segmaps = normalize_render_list(seg_data["instance_segmaps"])
+        inst_attrs = normalize_render_list(seg_data["instance_attribute_maps"])
+        if not multi_view and len(inst_segmaps) > 1:
+            inst_segmaps = inst_segmaps[:1]
+            inst_attrs = inst_attrs[:1]
+        if len(inst_segmaps) != len(colors):
+            raise RuntimeError(
+                f"Segmap frame count ({len(inst_segmaps)}) does not match RGB frame count ({len(colors)}). "
+                "Try --views 1 or report this mismatch."
+            )
 
-        label_path = write_yolo_dataset(
-            args.output,
-            image_stem="render",
-            instance_segmap=inst_segmap,
-            instance_attribute_map=inst_attrs,
-            class_names=DEFAULT_CLASS_NAMES,
-        )
-        box_count = len(label_path.read_text(encoding="utf-8").splitlines()) if label_path.exists() else 0
-        print(f"YOLO: {box_count} box(es) -> {label_path}")
+        if len(stems) == 1:
+            label_paths = [
+                write_yolo_dataset(
+                    args.output,
+                    image_stem=stems[0],
+                    instance_segmap=inst_segmaps[0],
+                    instance_attribute_map=inst_attrs[0],
+                    class_names=DEFAULT_CLASS_NAMES,
+                )
+            ]
+        else:
+            label_paths = write_yolo_multi_frame(
+                args.output,
+                image_stems=stems,
+                instance_segmaps=inst_segmaps,
+                instance_attribute_maps=inst_attrs,
+                class_names=DEFAULT_CLASS_NAMES,
+            )
+
+        seg_overlay_path = None
+        if args.export_seg:
+            for frame_index, (stem, rgb, inst_seg, _inst_attr) in enumerate(
+                zip(stems, colors, inst_segmaps, inst_attrs)
+            ):
+                _, overlay_path = export_segmentation_previews(
+                    args.output,
+                    image_stem=stem,
+                    rgb=rgb,
+                    instance_segmap=inst_seg,
+                    frame_index=frame_index,
+                )
+                seg_overlay_path = overlay_path
+
+        total_boxes = sum(len(p.read_text(encoding="utf-8").splitlines()) for p in label_paths if p.exists())
+        print(f"YOLO: {total_boxes} box(es) across {len(label_paths)} label file(s)")
+        if seg_overlay_path is not None:
+            print(f"Seg:  {seg_overlay_path} (mask overlay); HDF5 updated with instance_segmaps")
 
     print("Done.")
-    print(f"  PNG:  {png_path}")
-    print(f"  HDF5: {args.output / '0.hdf5'}")
-    if label_path is not None:
+    if multi_view:
+        print(f"  PNG:  {args.output / 'render.png'} (+ {len(colors)} frame(s) under images/)")
+        print(f"  HDF5: {args.output / '0.hdf5'} … {args.output / f'{len(colors) - 1}.hdf5'}")
+    else:
+        print(f"  PNG:  {args.output / 'render.png'}")
+        print(f"  HDF5: {args.output / '0.hdf5'}")
+    if label_paths:
         print(f"  YOLO: {args.output / 'data.yaml'}")
-    print(f"        python scripts/visualize_yolo.py")
+        print(f"        python scripts/visualize_yolo.py {images_dir / stems[0]}.png")
+        if args.export_seg:
+            print(f"        blenderproc vis hdf5 {args.output / '0.hdf5'}")
 
 
 if __name__ == "__main__":

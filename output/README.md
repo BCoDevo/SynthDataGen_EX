@@ -10,6 +10,8 @@ BlenderProc writes rendered frames here. Contents are gitignored except this REA
 | `render.png` | Quick-view image (written by `scripts/render_demo.py`) |
 | `images/render.png` | Same image, YOLO dataset layout |
 | `labels/render.txt` | YOLO bbox labels (`class x_center y_center w h`, normalized) |
+| `images/render_seg.png` | Colorized instance segmap (**`--export-seg` only**, e.g. `lesson_05`) |
+| `images/render_seg_overlay.png` | RGB + green mask — live demo / Exercise 7 |
 | `classes.txt` | Class names (`tank`) |
 | `data.yaml` | YOLOv8-style dataset config |
 
@@ -25,7 +27,7 @@ Disable YOLO export: `blenderproc run scripts/render_demo.py -- --no-yolo`
 blenderproc vis hdf5 output/0.hdf5
 ```
 
-Opens a simple viewer for the RGB image (and depth/normals if present).
+Opens a viewer for RGB and, when `--export-seg` was used, `instance_segmaps` (jet colormap).
 
 ### Option 2 — Export to PNG/JPG (recommended for sharing)
 
@@ -49,10 +51,10 @@ A typical RGB-only frame contains:
 ```python
 import h5py
 with h5py.File("output/0.hdf5") as f:
-    print(list(f.keys()))  # e.g. ['colors']
+    print(list(f.keys()))  # e.g. ['colors', 'instance_segmaps']
 ```
 
-If depth or normals are enabled in the render script, those arrays appear as additional keys.
+YOLO labels use a seg pass on every run; **`instance_segmaps` in HDF5** and seg PNGs require **`--export-seg`** (Exercise 5).
 
 ## YOLO annotations
 

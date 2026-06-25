@@ -1,44 +1,51 @@
-# Exercise 8 — Blender GUI walkthrough
+# Exercise 8 — Live Blender demo (instructor)
 
-Use with `LESSON.md` Exercise 8. **Goal:** see the same scene the CLI builds — orbit the viewport, read the Outliner — then close Blender yourself. No render runs; Blender does not auto-exit when the script finishes.
+Use during the live class demo in `LESSON.md` Exercise 8. **Not** a student Blender tutorial — you show the scene; they connect CLI flags to what appears on screen. Deeper Blender UI is better covered elsewhere (e.g. YouTube).
 
-**Prerequisite:** Exercise 5 (`blenderproc run` full environment).
+**Student takeaway:** The render pipeline builds a real 3D scene; `--tank-location`, `--camera-offset`, and asset paths correspond to objects and transforms in Blender.
+
+**Prerequisite:** Exercise 5 (`blenderproc run` full environment) so students have a render to reference conceptually.
 
 ---
 
-## Path A — Live scene from the pipeline (`blenderproc debug`)
+## Command (inspect-only)
 
-`blenderproc debug` opens Blender with `render_demo.py` loaded. **Inspect-only is the default in debug** — the script sets up the environment, tank, and camera, then stops. Blender stays open.
+Default in `blenderproc debug` — scene setup runs, no Cycles render, Blender stays open until you close it.
 
 ```bash
 blenderproc debug scripts/render_demo.py -- --environment assets/environment/Scene_Morning.blend --hdr assets/environment/HDRs/spruit_sunrise_4k.hdr --tank assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj --tank-location 0 3 0.2 --camera-offset 10 -10 4
 ```
 
-Use forward slashes on all platforms. Run from the **repo root**.
+Run from the **repo root**. Use forward slashes on all platforms.
 
-### What happens
+### Demo flow
 
-1. Blender opens on the **Scripting** workspace (scene is empty at first — expected).
-2. Click **Run BlenderProc** (toolbar above the text editor).
-3. Log prints: environment open, tank load, `Inspect-only — viewport set to camera view`.
-4. Blender switches to **Layout** and shows the **demo camera view** (same framing as `blenderproc run`). Press **Numpad 0** to toggle camera / orbit.
+1. Blender opens on **Scripting** (empty viewport until the script runs — expected).
+2. Click **Run BlenderProc**.
+3. Log prints environment load, tank placement, then `Inspect-only`.
+4. Layout workspace shows the built scene. Walk through the talking points below, then close Blender.
 
-The terminal stays attached until you **close Blender** — that is normal.
+The terminal stays attached until Blender exits — that is normal.
 
-### What to inspect
+---
 
-| Area | Look for |
-|------|----------|
-| **Outliner** | Tank mesh (`ztz_99a_0`); ~64 environment objects |
-| **3D Viewport** | Tank on terrain; HDR-lit scene |
-| **Properties → Object → Transform** | Location ≈ `(0, 3, 0.2)` per `--tank-location` |
-| **Numpad 0** | Toggles camera view — should match Exercise 5 `render.png` framing on load |
+## Talking points (keep it short)
 
-**Navigate:** MMB orbit · Shift+MMB pan · scroll zoom · **Numpad .** frame selection
+| Point | Tie to CLI / pipeline |
+|-------|------------------------|
+| Tank mesh in the **Outliner** (`ztz_99a_0`) | `--tank` path — this is what YOLO labels |
+| **Transform → Location** ≈ `(0, 3, 0.2)` | `--tank-location` |
+| Environment objects around the tank | `Scene_Morning.blend` + texture relink in the script |
+| **Demo camera** vs baked scene `Camera` | `--camera-offset` vs `--use-scene-camera` |
+| Tank **materials** show textures (not flat gray) | DDS relink under `textures/` |
 
-### Optional: render from debug
+Do not drill navigation shortcuts or workspaces — one pass, ~5–10 minutes.
 
-To run Cycles inside debug (Blender still closes when you quit the app afterward):
+---
+
+## Optional: render from debug
+
+If you want Cycles inside debug (still not for student lab time):
 
 ```bash
 blenderproc debug scripts/render_demo.py -- --force-render --environment assets/environment/Scene_Morning.blend --hdr assets/environment/HDRs/spruit_sunrise_4k.hdr --tank assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj --output output/lesson_08_debug
@@ -48,52 +55,9 @@ YOLO labels still require `blenderproc run`, not debug.
 
 ---
 
-## Path B — Environment `.blend` alone
+## Optional extras (only if time)
 
-Copy the Blender path from any `blenderproc run` log:
+- Open `Scene_Morning.blend` directly in Blender to show the authored environment without the tank.
+- Open `ztz_99a_0.obj` alone to show scale and DDS materials.
 
-```
-Using blender in /home/<you>/blender/blender-4.2.1-linux-x64/...
-```
-
-```bash
-# Linux / macOS
-/path/to/blender assets/environment/Scene_Morning.blend
-```
-
-```powershell
-# Windows
-& "C:\path\to\blender.exe" assets/environment/Scene_Morning.blend
-```
-
-| Target | Note |
-|--------|------|
-| Outliner → `Camera` | Baked scene camera; differs from demo camera |
-| Ground near `(0, 3, 0)` | Tank pivot from the script |
-| Shading on terrain | Texture nodes → `assets/environment/Textures/` |
-
----
-
-## Path C — Tank OBJ alone
-
-**File → Import → Wavefront (.obj)** from a blank file, or:
-
-```bash
-/path/to/blender --factory-startup assets/objects/tank/cn_ztz_99a/ztz_99a_0.obj
-```
-
-| Check | Expected |
-|-------|----------|
-| Materials | DDS textures in Shading (not flat gray) |
-| Scale | Large game export (tens of meters) |
-| Mesh | Single object — this is what segmentation labels |
-
----
-
-## Instructor screenshot checklist (optional)
-
-1. Scripting tab — **Run BlenderProc** button
-2. Layout — Outliner with tank + environment
-3. Transform panel vs. `--tank-location`
-4. Camera view (Numpad 0) vs. `output/lesson_05/images/render.png`
-5. Shading — tank DDS nodes
+These are illustrative — not required for the lesson outcome.

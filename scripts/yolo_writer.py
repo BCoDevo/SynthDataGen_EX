@@ -129,3 +129,97 @@ def write_yolo_dataset(
     write_data_yaml(output_dir / "data.yaml", class_names, output_dir)
 
     return label_path
+
+
+def write_yolo_multi_frame(
+    output_dir: Path,
+    image_stems: list[str],
+    instance_segmaps: list[np.ndarray],
+    instance_attribute_maps: list[list[dict]],
+    class_names: list[str] | None = None,
+) -> list[Path]:
+    """Write YOLO labels for multiple frames (orbit / multi-view renders)."""
+    if not (len(image_stems) == len(instance_segmaps) == len(instance_attribute_maps)):
+        raise ValueError("image_stems, instance_segmaps, and instance_attribute_maps must have the same length")
+
+    labels_dir = output_dir / "labels"
+    label_paths: list[Path] = []
+    for stem, segmap, attr_map in zip(image_stems, instance_segmaps, instance_attribute_maps):
+        lines = instance_segmap_to_yolo_lines(segmap, attr_map)
+        label_path = labels_dir / f"{stem}.txt"
+        write_yolo_label_file(label_path, lines)
+        label_paths.append(label_path)
+
+    write_classes_file(output_dir / "classes.txt", class_names)
+    write_data_yaml(output_dir / "data.yaml", class_names, output_dir)
+    return label_paths
+
+
+def colorize_instance_segmap(instance_segmap: np.ndarray) -> np.ndarray:
+    """RGB preview of the instance ID map (background black, each instance a distinct color)."""
+    height, width = instance_segmap.shape
+    rgb = np.zeros((height, width, 3), dtype=np.uint8)
+    for inst_id in np.unique(instance_segmap):
+        inst_id = int(inst_id)
+        if inst_id == 0:
+            continue
+        hue = (inst_id * 97) % 256
+        rgb[instance_segmap == inst_id] = (hue, 200, 80)
+    return rgb
+
+
+def overlay_instance_mask(rgb: np.ndarray, instance_segmap: np.ndarray, alpha: float = 0.45) -> np.ndarray:
+    """Blend a green mask over RGB — shows the pixels that feed the YOLO bounding box."""
+    base = rgb.astype(np.float32)
+    mask = instance_segmap != 0
+    if not mask.any():
+        return rgb.copy()
+    highlight = np.array([0.0, 255.0, 0.0], dtype=np.float32)
+    base[mask] = base[mask] * (1.0 - alpha) + highlight * alpha
+    return np.clip(base, 0, 255).astype(np.uint8)
+
+
+def append_segmentation_to_hdf5(hdf5_path: Path, instance_segmap: np.ndarray) -> None:
+    """Merge the instance segmap into an existing BlenderProc .hdf5 (for blenderproc vis hdf5)."""
+    import h5py
+
+    with h5py.File(hdf5_path, "a") as handle:
+        for key in ("instance_segmaps", "class_segmaps", "instance_attribute_maps"):
+            if key in handle:
+                del handle[key]
+        handle.create_dataset("instance_segmaps", data=instance_segmap, compression="gzip")
+
+
+def export_segmentation_previews(
+    output_dir: Path,
+    image_stem: str,
+    rgb: np.ndarray,
+    instance_segmap: np.ndarray,
+    frame_index: int,
+) -> tuple[Path, Path]:
+    """Write seg PNG overlays and append seg arrays to the matching frame HDF5."""
+    images_dir = output_dir / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+
+    seg_path = images_dir / f"{image_stem}_seg.png"
+    overlay_path = images_dir / f"{image_stem}_seg_overlay.png"
+    save_rgb = _save_rgb_image
+    save_rgb(colorize_instance_segmap(instance_segmap), seg_path)
+    save_rgb(overlay_instance_mask(rgb, instance_segmap), overlay_path)
+
+    hdf5_path = output_dir / f"{frame_index}.hdf5"
+    if hdf5_path.exists():
+        append_segmentation_to_hdf5(hdf5_path, instance_segmap)
+
+    return seg_path, overlay_path
+
+
+def _save_rgb_image(rgb: np.ndarray, path: Path) -> None:
+    try:
+        import imageio.v3 as iio
+
+        iio.imwrite(path, rgb)
+    except ImportError:
+        from PIL import Image
+
+        Image.fromarray(rgb).save(path)

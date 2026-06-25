@@ -4,7 +4,9 @@ Minimal hands-on demo for generating a single synthetic image: one War Thunder t
 
 Students clone the repo (assets are bundled — no separate download) and run one script.
 
-**Teaching this in a class?** Start with **[LESSON.md](LESSON.md)** — guided exercises from asset paths through CLI parameters to inspecting the `.blend` and tank mesh in Blender. Instructor notes: `lesson/INSTRUCTOR.md`.
+**Teaching this in a class?** Start with **[LESSON.md](LESSON.md)** — guided exercises from asset paths through CLI parameters to a live Blender demo (instructor shows how flags map to the 3D scene). Instructor notes: `lesson/INSTRUCTOR.md`.
+
+**Scaling beyond one frame?** See **[ROADMAP_TO_PRODUCTION.md](ROADMAP_TO_PRODUCTION.md)** — how this teaching example grows into a wider synthetic dataset pipeline.
 
 ## Project layout
 
@@ -28,6 +30,7 @@ Students clone the repo (assets are bundled — no separate download) and run on
 ├── output/                      # renders land here (see output/README.md)
 ├── lesson/                      # worksheet template + instructor notes
 ├── LESSON.md                    # hands-on student workbook (~60–90 min)
+├── ROADMAP_TO_PRODUCTION.md     # scaling the demo to a production SDG pipeline
 ├── requirements.txt
 └── README.md
 ```
@@ -71,7 +74,7 @@ Every successful render writes (see `output/README.md` for details):
 
 - `output/render.png` — quick visual check
 - `output/images/render.png` — same image, YOLO dataset layout
-- `output/0.hdf5` — full BlenderProc frame
+- `output/0.hdf5` — BlenderProc frame (RGB; add `--export-seg` for `instance_segmaps` — see Exercise 5 in `LESSON.md`)
 - `output/labels/render.txt` — YOLO bbox labels (on by default; disable with `--no-yolo`)
 - `output/data.yaml` — YOLO dataset config
 
@@ -87,13 +90,9 @@ python scripts/visualize_yolo.py
 python scripts/export_hdf5_image.py output/0.hdf5
 ```
 
-### 5. Debug in Blender GUI (optional)
+### 5. Live Blender demo (instructors)
 
-```bash
-blenderproc debug scripts/render_demo.py
-```
-
-Opens Blender with the script loaded. Press **Run BlenderProc** in the scripting tab.
+`blenderproc debug` loads the script for a **live class demo** — see `lesson/BLENDER_GUI.md`. Not required for students to operate Blender themselves.
 
 ## Customization
 

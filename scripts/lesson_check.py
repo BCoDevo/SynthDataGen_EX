@@ -64,6 +64,23 @@ def check_render(output: str) -> int:
     if failed:
         print(f"\n{failed} file(s) missing. Did the render finish? Check --output folder.", file=sys.stderr)
         return 1
+
+    seg_overlay = out / "images" / "render_seg_overlay.png"
+    if seg_overlay.exists():
+        print(f"OK   Segmentation overlay: {seg_overlay}")
+    elif (out / "labels" / "render.txt").exists():
+        print("     (no seg overlay — expected unless you used --export-seg, e.g. lesson_05)")
+
+    try:
+        import h5py
+
+        hdf5_path = out / "0.hdf5"
+        with h5py.File(hdf5_path, "r") as handle:
+            if "instance_segmaps" in handle:
+                print(f"OK   HDF5 instance_segmaps: {tuple(handle['instance_segmaps'].shape)}")
+    except ImportError:
+        pass
+
     lines = (out / "labels" / "render.txt").read_text(encoding="utf-8").strip().splitlines()
     print(f"\nRender OK — {len(lines)} label line(s). Continue with visualize_yolo or Exercise 3.")
     return 0
