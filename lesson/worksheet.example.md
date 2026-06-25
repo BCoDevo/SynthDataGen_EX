@@ -1,42 +1,38 @@
 # SynthDataGen worksheet — [your name]
 
-> Copy this file to `lesson/worksheet.md` and fill it in as you complete LESSON.md.
-> `lesson/worksheet.md` is gitignored — your notes stay local.
+> Copy to `lesson/worksheet.md` (gitignored).
 
-## Exercise 1 paths
+## Exercise 1 — paths
 - Tank: 
 - Environment: 
 - HDR: 
 - Script: 
 
 ## Exercise 2
-- Resolution: 
-- Samples: 
 - Prediction (background): 
-- Actual result: 
+- Actual: 
 
-## Exercise 3
-- Raw label line: 
-- Box in pixels (x_min, y_min, x_max, y_max): 
+## Exercise 3 — tank location
+- Run B (Z):  Effect: 
+- Run C (X):  Effect: 
 
-## Exercise 4
-- Run B Z value:  Effect: 
-- Run C X value:  Effect: 
-
-## Exercise 5
+## Exercise 4 — camera
 - Offset A: 
 - Offset B: 
 - More top-down: 
 
-## Exercise 6
-- Two visual differences vs tank-only: 
+## Exercise 5 — full environment
+- Two differences vs tank-only: 
   1. 
   2. 
 
-## Exercise 7
-- Parameter: 
+## Exercise 6 — parameter experiment
+- Flag: 
 - Value: 
-- Observed change: 
+- Change: 
+
+## Exercise 8 — Blender inspection
+- One thing visible in GUI but not obvious from CLI: 
 
 ## Wrap-up
 1. 

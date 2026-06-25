@@ -1,21 +1,18 @@
 # Instructor notes — Synthetic data hands-on lesson
 
-**Audience:** Students new to BlenderProc / synthetic data  
-**Duration:** 60–90 min (Exercises 1–6 core; 7–8 extension)  
-**Student doc:** `LESSON.md`  
-**Worksheet:** students create `lesson/worksheet.md` from template (gitignored)
+**Audience:** College graduates / technical professionals new to BlenderProc  
+**Duration:** 60–90 min (Exercises 1–5 core; 6–8 extension)  
+**Student doc:** `LESSON.md`
 
 ---
 
 ## Learning objectives
 
-By the end, students should be able to:
-
-1. Locate bundled 3D assets and explain why relative paths matter
-2. Assemble a `blenderproc run` command with explicit `--tank`, `--environment`, and `--hdr`
-3. Interpret a YOLO label line and relate it to pixels
-4. Predict the effect of `--tank-location` and `--camera-offset`
-5. Describe RGB + label + `data.yaml` as a minimal detection dataset
+1. Locate bundled assets and explain relative path dependencies (MTL → textures)
+2. Run `blenderproc` with explicit asset paths and interpret logs
+3. Predict effects of `--tank-location` and `--camera-offset`
+4. Understand YOLO export as an automated segmentation sidecar (not a manual labeling exercise)
+5. Connect CLI parameters to objects visible in Blender's outliner/viewport
 
 ---
 
@@ -23,20 +20,21 @@ By the end, students should be able to:
 
 | Block | Exercises | Minutes |
 |-------|-----------|---------|
-| Setup + asset map | 0–1 | 15 |
-| First render + labels | 2–3 | 20 |
-| Spatial reasoning | 4–5 | 20 |
-| Full scene | 6 | 15–25 |
-| Extension | 7–8 | 15 |
+| Setup + asset map | 0–1 | 10 |
+| First render + YOLO ref | 2 | 15 |
+| Spatial parameters | 3–4 | 20 |
+| Full scene | 5 | 15–25 |
+| Extension | 6–7 | 10 |
+| Blender capstone | 8 | 15–20 |
 | Discussion | Wrap-up | 10 |
 
-Use **low resolution** (`640×360`, `16` samples) until Exercise 6 to keep GPUs cool in a classroom.
+Keep `640×360` / `16` samples until Exercise 5.
 
 ---
 
-## Answer key (representative)
+## Answer key
 
-### Exercise 1 paths
+### Exercise 1
 
 | Field | Answer |
 |-------|--------|
@@ -45,85 +43,60 @@ Use **low resolution** (`640×360`, `16` samples) until Exercise 6 to keep GPUs 
 | HDR | `assets/environment/HDRs/spruit_sunrise_4k.hdr` |
 | Script | `scripts/render_demo.py` |
 
-**Discussion:** MTL references `textures/*.dds` relative to the OBJ folder — moving the OBJ without textures breaks materials.
-
 ### Exercise 2
 
-- `--tank-only` skips the `.blend` environment; script builds a studio ground + lights.
-- Low res/samples = faster iteration while learning the pipeline.
-- Background: **gray ground plane**, not grass.
+- `--tank-only` → studio ground + lamps; no `.blend` environment
+- Background: gray plane, not grass
+- YOLO: class `0` = tank; labels auto-generated — no student math required
 
-### Exercise 3
+### Exercise 3–4
 
-Example line at 640×360:
-
-```
-0 0.557813 0.577778 0.853125 0.844444
-```
-
-- Class `0` = `tank` (from `category_id` 1 → YOLO 0 via `yolo_writer.py`)
-- Decoded box roughly: wide box centered on tank (most of frame in tank-only view)
-
-Code trail: `render_demo.py` → `TANK_CATEGORY_ID = 1` → `label_tank_objects()` → `yolo_writer.DEFAULT_CATEGORY_TO_YOLO = {1: 0}`
-
-### Exercise 4
-
-- **Higher Z:** tank floats above ground plane (tank-only) or may hover over terrain (full scene)
-- **Lower Z:** tracks clip into ground / z-fighting
-- **Change X/Y:** tank shifts in world space → bbox center moves in label file
+- Z too low → clipping; Z high → floating
+- X/Y shift → tank moves in frame; label bbox follows
+- Higher camera Z → more top-down; perspective changes bbox extent
 
 ### Exercise 5
 
-- Larger Z in offset → more top-down; larger horizontal components → more side angle
-- Bbox width/height changes with perspective — good lead-in to domain shift
+- Texture relink fixes author-machine paths
+- HDR provides sole lighting
 
-### Exercise 6
+### Exercise 8 (capstone talking points)
 
-Log talking points:
+**8a — debug:** Students see the script populate the scene; transform panel validates `--tank-location`. Demo camera is a computed pose, not necessarily the blend's `Camera` object.
 
-- **Texture relink:** blend was authored on another machine (`Pictures\Blender Textures\`); script remaps by filename to `assets/environment/Textures/`
-- **HDR sky:** scene has no lamps; world background provides lighting
+**8b — Scene_Morning.blend:** Baked camera faces south-side framing; demo camera + `env-rotation` exist to match that look from a different viewpoint. Ground near `(0, 3, 0)` is the placement reference.
 
-### Exercise 7
+**8c — Tank OBJ:** War Thunder scale; DDS materials; single mesh object = one instance ID in segmentation.
 
-Accept any well-documented experiment. Common good choices: `--hdr-strength 2.0`, `--env-rotation 0`, `--use-scene-camera`.
-
-### Wrap-up (model answers)
-
-1. **Synthetic:** geometry, materials, and camera are simulated; labels come from perfect segmentation, not human annotation.
-2. **Z too low:** mesh intersects terrain; bbox may shrink or look wrong; unrealistic training data.
-3. **Domain shift:** studio vs outdoor — detector may fail; need variety in environment, lighting, camera, poses.
-4. **Randomize:** camera offset, tank position/yaw, HDR choice/strength, time of day, resolution, clutter.
+**Common friction:** `blenderproc debug` requires the same `--` flag passthrough as `run`. Opening `.blend` via raw `blender.exe` path — have students copy from their log line.
 
 ---
 
-## Common student issues
-
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| `Tank asset not found` | Wrong path or not in repo root | `python scripts/lesson_check.py paths ...` |
-| Forgot `--` before flags | BlenderProc argparse | Must be `blenderproc run scripts/render_demo.py -- --tank-only` |
-| Old annotated image | visualize picks newest PNG by mtime | Point to explicit path: `python scripts/visualize_yolo.py output/lesson_06/images/render.png` |
-| Exercise 6 slow | Full env + HD res | Cap at 1280×720 / 32 samples for class |
-| Empty label file | `--no-yolo` or segmap failure | Re-run without `--no-yolo`; ensure updated `render_demo.py` |
-
----
-
-## Assessment rubric (simple)
+## Assessment rubric
 
 | Criterion | Meets |
 |-----------|--------|
-| Paths | All four correct in worksheet; `lesson_check paths` passes |
-| Commands | Uses explicit `--tank` / `--environment` / `--hdr` in Ex 6 |
-| YOLO math | Manual pixel box within ~5 px of `lesson_check yolo` |
-| Experiments | At least 3 distinct outputs in `output/lesson_*` |
-| Reflection | Wrap-up shows cause/effect, not just “it worked” |
+| Paths | `lesson_check paths` passes |
+| Renders | At least `lesson_02`, `lesson_05`, and one experiment folder |
+| Parameters | Can explain tank-location vs camera-offset |
+| Blender | Completed 8a or 8b; worksheet note on GUI observation |
+| Wrap-up | Mentions domain shift / randomization, not just "synthetic = fake" |
+
+---
+
+## Common issues
+
+| Symptom | Fix |
+|---------|-----|
+| Forgot `--` before flags | `blenderproc run scripts/render_demo.py -- --tank-only` |
+| Debug opens empty scene | Must click Run BlenderProc in Scripting tab |
+| Wrong annotated image | `python scripts/visualize_yolo.py output/lesson_05/images/render.png` |
+| Empty labels | Re-run without `--no-yolo` |
 
 ---
 
 ## Optional extensions
 
-- **Damaged tank:** `--tank assets/objects/tank/cn_ztz_99a/ztz_99a_dmg_0.obj`
-- **Batch script:** loop over random `--camera-offset` values (students write the loop)
-- **GUI:** `blenderproc debug scripts/render_demo.py` — find tank empty in outliner
-- **Train:** `yolo detect train data=output/lesson_06/data.yaml model=yolov8n.pt epochs=10 imgsz=640` (needs `ultralytics`)
+- Damaged tank: `--tank assets/objects/tank/cn_ztz_99a/ztz_99a_dmg_0.obj`
+- Batch camera offsets (student-written loop)
+- Ultralytics train on `output/lesson_05/data.yaml`

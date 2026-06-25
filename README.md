@@ -4,7 +4,7 @@ Minimal hands-on demo for generating a single synthetic image: one War Thunder t
 
 Students clone the repo (assets are bundled — no separate download) and run one script.
 
-**Teaching this in a class?** Start with **[LESSON.md](LESSON.md)** — a hands-on workbook where students look up paths, build commands, and inspect labels (not just copy-paste). Instructor notes: `lesson/INSTRUCTOR.md`.
+**Teaching this in a class?** Start with **[LESSON.md](LESSON.md)** — guided exercises from asset paths through CLI parameters to inspecting the `.blend` and tank mesh in Blender. Instructor notes: `lesson/INSTRUCTOR.md`.
 
 ## Project layout
 

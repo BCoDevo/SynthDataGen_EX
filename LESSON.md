@@ -1,49 +1,45 @@
 # Hands-on lesson: Synthetic data with BlenderProc
 
 **Time:** ~60–90 minutes  
-**Goal:** Generate one labeled synthetic image and understand *what you changed* at each step.
-
-This is not a copy-paste demo. You will look up paths, assemble commands, predict outcomes, and inspect files before moving on.
+**Goal:** Generate a labeled synthetic image and understand what each pipeline parameter controls.
 
 ---
 
 ## What you are building
 
-A tiny synthetic dataset for object detection:
+A minimal object-detection dataset:
 
 | Piece | File | Role |
 |-------|------|------|
-| RGB image | `output/images/render.png` | What a camera “saw” |
-| Label | `output/labels/render.txt` | Where the tank is (YOLO format) |
-| Manifest | `output/data.yaml` | Tells trainers where images/labels live |
+| RGB image | `output/images/render.png` | Rendered camera view |
+| Label | `output/labels/render.txt` | Tank bounding box (YOLO format) |
+| Manifest | `output/data.yaml` | Dataset paths for trainers |
 
-**Pipeline in one sentence:** Blender loads a 3D scene → places a tank → renders a photo → derives a bounding box from segmentation → writes YOLO text.
+**Pipeline:** Blender loads a 3D scene → places a tank → renders RGB → instance segmentation → YOLO label export.
 
 ---
 
 ## Before you start
 
-- Python 3.10+ installed
+- Python 3.10+
 - ~2 GB free disk (BlenderProc downloads Blender on first run)
-- Terminal open at the **repo root** (the folder that contains `scripts/` and `assets/`)
-
-Clone once (this is the only full command block):
+- Terminal at the **repo root** (`scripts/`, `assets/` visible)
 
 ```bash
 git clone https://github.com/BCoDevo/SynthDataGen_EX.git
 cd SynthDataGen_EX
 ```
 
-Then create and activate a venv, and install deps — but **type the activate line for your OS yourself** (see `README.md` if unsure), then:
+Create a venv, activate it, then:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-**Checkpoint 0:** From the repo root, run:
+**Checkpoint 0:** Confirm bundled assets are present:
 
 ```bash
-# Windows PowerShell
+# Windows
 dir assets\environment
 dir assets\objects\tank\cn_ztz_99a
 
@@ -52,323 +48,285 @@ ls assets/environment
 ls assets/objects/tank/cn_ztz_99a
 ```
 
-You should see `Scene_Morning.blend`, HDR files, and `ztz_99a_0.obj`.
-
 ---
 
 ## Exercise 1 — Map the assets (10 min)
 
-Open `assets/README.md` and the folder tree. **Write these paths yourself** in `lesson/worksheet.md` (create it from the template below). Use **relative paths from the repo root**.
+Open `assets/README.md` and record these paths in `lesson/worksheet.md` (copy from `lesson/worksheet.example.md`). Paths are relative to the repo root.
 
-| What | Your path (you fill in) |
-|------|-------------------------|
+| What | Path |
+|------|------|
 | Tank mesh (intact) | `assets/objects/tank/cn_ztz_99a/____________` |
 | Environment scene | `assets/environment/____________________` |
 | Morning HDR sky | `assets/environment/HDRs/________________` |
 | Main render script | `scripts/________________` |
 
-**Think:** Why does the tank path include `textures/` next to the `.obj`?  
-*(Hint: open `ztz_99a_0.mtl` and look at one `map_Kd` line.)*
-
-Verify your paths exist:
+**Question:** Why must `textures/` stay next to `ztz_99a_0.obj`?  
+*(Check `ztz_99a_0.mtl` — material paths are relative.)*
 
 ```bash
-python scripts/lesson_check.py paths --tank <your-tank-path> --environment <your-env-path> --hdr <your-hdr-path>
+python scripts/lesson_check.py paths --tank <tank-path> --environment <env-path> --hdr <hdr-path>
 ```
-
-All three should print `OK`.
 
 ---
 
-## Exercise 2 — Your first render (tank only, fast settings)
+## Exercise 2 — First render (tank-only, fast settings)
 
-Before running anything, answer in your worksheet:
+Before running:
 
 1. What does `--tank-only` skip?
-2. Why start with a low resolution and few samples?
-
-Now **build this command yourself** — plug in the paths from Exercise 1 and choose the numbers in brackets:
+2. Why use lower resolution and sample count for early iterations?
 
 ```bash
 blenderproc run scripts/render_demo.py -- \
   --tank-only \
-  --tank <your-tank-path> \
-  --resolution [WIDTH] [HEIGHT] \
-  --samples [NUMBER] \
+  --tank <tank-path> \
+  --resolution 640 360 \
+  --samples 16 \
   --output output/lesson_02
 ```
 
-Suggested first run: `640` `360` and `16` samples (fast). Do **not** use defaults yet — pick values explicitly.
-
-**Predict:** Will the background be grass or a gray studio floor? Write your guess, then run.
-
-**Checkpoint 2:**
+**Predict:** Studio ground plane or outdoor grass? Run and check.
 
 ```bash
 python scripts/lesson_check.py render --output output/lesson_02
 python scripts/visualize_yolo.py output/lesson_02/images/render.png
 ```
 
-Open `output/lesson_02/render.png` and `output/lesson_02/images/render_annotated.png`.  
-Was your prediction correct?
+Compare `render.png` and `render_annotated.png`.
 
----
+### YOLO labels (reference)
 
-## Exercise 3 — Read a YOLO label by hand (15 min)
-
-Open `output/lesson_02/labels/render.txt`. One line looks like:
+The render script exports detection labels automatically. Each line in `labels/render.txt`:
 
 ```
 <class> <x_center> <y_center> <width> <height>
 ```
 
-All five numbers are **normalized** to 0–1 relative to image width/height.
+All coordinates are normalized to `[0, 1]` against image width/height. Class `0` is `tank` (see `output/classes.txt`).
 
-Using your image size from Exercise 2, convert to pixels:
+Flow: `render_demo.py` tags the tank with `category_id` → instance segmentation pass → `yolo_writer.py` fits a bounding box → `visualize_yolo.py` draws it for review. No manual label editing required for this demo.
 
-```
-x_center_px = x_center × image_width
-width_px    = width    × image_width
-```
-
-Do the same for `y_center` and `height` with image height.
-
-**Worksheet tasks:**
-
-1. Write the raw line from your `render.txt`.
-2. Compute bounding box in pixels: `(x_min, y_min, x_max, y_max)`.
-3. Open the annotated PNG — does the box cover the tank hull (not necessarily the whole image)?
-
-Optional check:
-
-```bash
-python scripts/lesson_check.py yolo --label output/lesson_02/labels/render.txt --width 640 --height 360
-```
-
-This prints a decoded box so you can compare your math.
-
-**Think:** Where in `scripts/render_demo.py` is the tank assigned `category_id`? What YOLO class index does that become?  
-*(Trace: `TANK_CATEGORY_ID` → `yolo_writer.py` → `classes.txt`.)*
+To decode a line programmatically: `python scripts/lesson_check.py yolo --label output/lesson_02/labels/render.txt --width 640 --height 360`
 
 ---
 
-## Exercise 4 — Move the tank (cause and effect)
+## Exercise 3 — Move the tank
 
-Blender uses **Z-up** coordinates (meters). Default placement is `[0, 3, 0.2]` → `(x, y, z)`.
+Blender is **Z-up**. Default placement: `[0, 3, 0.2]` as `(x, y, z)`.
 
-Pick **three** different `--tank-location` values for three runs. Example pattern (change the numbers yourself):
+Run three variants with separate output folders:
 
-| Run | `--tank-location` | What you expect to see |
-|-----|-------------------|------------------------|
-| A | `0 3 0.2` | baseline (compare to Ex 2) |
-| B | `0 3 _____` | higher Z — tank floats or sits? |
-| C | `_____ 3 0.2` | shifted X — tank moves where in frame? |
-
-Use a **different** `--output` folder per run, e.g. `output/lesson_04a`.
-
-Command shape (fill in everything in brackets):
+| Run | `--tank-location` | Expected effect |
+|-----|-------------------|-----------------|
+| A | `0 3 0.2` | baseline |
+| B | `0 3 0.8` | raised — float or sit higher? |
+| C | `5 3 0.2` | shifted in X |
 
 ```bash
 blenderproc run scripts/render_demo.py -- \
   --tank-only \
-  --tank <your-tank-path> \
-  --tank-location [X] [Y] [Z] \
+  --tank <tank-path> \
+  --tank-location <X> <Y> <Z> \
   --resolution 640 360 \
   --samples 16 \
-  --output output/lesson_04[b]
+  --output output/lesson_03a
 ```
 
-**Checkpoint 4:** For run B, did the tank clip into the ground or float? For run C, did the bounding box move in `render.txt`?
+Note whether the tank clips, floats, or shifts in frame. Labels update automatically when YOLO export is enabled.
 
 ---
 
-## Exercise 5 — Move the camera
+## Exercise 4 — Move the camera
 
-The demo camera is **not** inside the `.blend` file. It is placed relative to the tank:
+The demo camera is computed from the tank center plus an offset (default `[10, -10, 4]` in `render_demo.py`):
 
 ```
 camera_position = tank_center + camera_offset
 ```
 
-Default offset: `[10, -10, 4]` (see top of `scripts/render_demo.py`).
-
-Run two renders with the **same** tank location but **different** offsets you choose:
+Run two renders — same tank location, different offsets:
 
 ```bash
 blenderproc run scripts/render_demo.py -- \
   --tank-only \
-  --tank <your-tank-path> \
+  --tank <tank-path> \
   --tank-location 0 3 0.2 \
-  --camera-offset [X1] [Y1] [Z1] \
+  --camera-offset <X1> <Y1> <Z1> \
   --resolution 640 360 \
   --samples 16 \
-  --output output/lesson_05a
+  --output output/lesson_04a
 ```
 
 ```bash
 blenderproc run scripts/render_demo.py -- \
   --tank-only \
-  --tank <your-tank-path> \
+  --tank <tank-path> \
   --tank-location 0 3 0.2 \
-  --camera-offset [X2] [Y2] [Z2] \
+  --camera-offset <X2> <Y2> <Z2> \
   --resolution 640 360 \
   --samples 16 \
-  --output output/lesson_05b
+  --output output/lesson_04b
 ```
 
-**Worksheet:**
-
-1. Which offset gave a more top-down view? How can you tell from the image?
-2. Did the YOLO box width/height change a lot between 05a and 05b? Why?
+Which offset is more top-down? How does perspective affect the bounding box in `render.txt`?
 
 ---
 
-## Exercise 6 — Full environment (manual paths)
+## Exercise 5 — Full environment
 
-Now use the morning scene. **Every asset path must be typed by you** — no defaults assumed.
+Use explicit paths for all inputs:
 
 ```bash
 blenderproc run scripts/render_demo.py -- \
-  --environment <your-env-path> \
-  --hdr <your-hdr-path> \
-  --tank <your-tank-path> \
+  --environment <env-path> \
+  --hdr <hdr-path> \
+  --tank <tank-path> \
   --tank-location 0 3 0.2 \
   --resolution 1280 720 \
   --samples 32 \
-  --output output/lesson_06
+  --output output/lesson_05
 ```
 
-This takes longer than tank-only. While it runs, read the log:
+While rendering, read the log:
 
-- `Relinked N environment texture(s)` — what problem is the script solving?
-- `Sky lighting: ...` — where does light come from if the blend has no lamps?
-
-**Checkpoint 6:**
+- `Relinked N environment texture(s)` — broken paths from the author's machine are remapped to `assets/environment/Textures/`
+- `Sky lighting: ...` — HDR world background; the blend has no scene lamps
 
 ```bash
-python scripts/lesson_check.py render --output output/lesson_06
-python scripts/visualize_yolo.py output/lesson_06/images/render.png
+python scripts/lesson_check.py render --output output/lesson_05
+python scripts/visualize_yolo.py output/lesson_05/images/render.png
 ```
 
-**Compare** `lesson_02` vs `lesson_06` side by side. List **two** visual differences (lighting, ground, background clutter, etc.).
+Compare `lesson_02` vs `lesson_05` — note two visual differences (lighting, terrain, clutter, etc.).
 
 ---
 
-## Exercise 7 — One knob you choose
+## Exercise 6 — Parameter experiment
 
-Pick **one** parameter to experiment with. Look up its flag with:
+Pick one flag from `--help` and run a comparison render:
 
 ```bash
 blenderproc run scripts/render_demo.py -- --help
 ```
 
-Examples:
-
-| Idea | Flag to try |
-|------|-------------|
+| Idea | Flag |
+|------|------|
 | Brighter sky | `--hdr-strength` |
-| Scene faces another way | `--env-rotation` |
-| Author’s camera from the blend | `--use-scene-camera` |
-| Skip labels for speed | `--no-yolo` |
+| Scene rotation | `--env-rotation` |
+| Blend's baked camera | `--use-scene-camera` |
+| Skip labels | `--no-yolo` |
 | Higher quality | `--samples` |
 
-Document in your worksheet:
-
-1. Parameter name and value you tried  
-2. Command you ran (full line)  
-3. What changed in the output  
+Record the parameter, value, and observable change in your worksheet.
 
 ---
 
-## Exercise 8 — Inspect the data layer (no Blender)
+## Exercise 7 — HDF5 export
 
 ```bash
-python scripts/export_hdf5_image.py output/lesson_06/0.hdf5 -o output/lesson_06/from_hdf5.png
+python scripts/export_hdf5_image.py output/lesson_05/0.hdf5 -o output/lesson_05/from_hdf5.png
 ```
 
-Open `from_hdf5.png` next to `render.png`. Should match.
-
-Optional — peek inside HDF5:
+Confirm `from_hdf5.png` matches `render.png`. Optional:
 
 ```bash
-python -c "import h5py; f=h5py.File('output/lesson_06/0.hdf5'); print(list(f.keys())); print(f['colors'].shape)"
+python -c "import h5py; f=h5py.File('output/lesson_05/0.hdf5'); print(list(f.keys())); print(f['colors'].shape)"
 ```
 
-**Think:** Why does the script write *both* HDF5 and PNG?
+Why does the pipeline write both HDF5 and PNG?
 
 ---
 
-## Wrap-up questions
+## Exercise 8 — Inspect assets in Blender (capstone)
 
-Answer in your own words (3–5 sentences each):
+Connect CLI parameters to the underlying 3D data.
 
-1. What is *synthetic* about this image compared to a photo from a phone?
-2. What could go wrong if `--tank-location` Z is too low in the full environment?
-3. If you trained YOLO on only `lesson_02` images, would it work on `lesson_06`? What would you change to make a more useful dataset?
-4. What is one thing you would randomize if you generated **1000** images?
+### 8a — Pipeline view (`blenderproc debug`)
+
+Opens the same Blender build used by your renders:
+
+```bash
+blenderproc debug scripts/render_demo.py -- \
+  --environment <env-path> \
+  --hdr <hdr-path> \
+  --tank <tank-path> \
+  --tank-location 0 3 0.2 \
+  --resolution 640 360 \
+  --samples 4 \
+  --output output/lesson_08
+```
+
+In Blender:
+
+1. **Scripting** workspace → run the script (BlenderProc play button).
+2. **Layout** workspace → **Outliner**: locate the tank mesh and environment objects.
+3. Select the tank → **Object Properties → Transform**. Compare Location to `--tank-location`.
+4. Select **View → Cameras → Active Camera** (or select the camera object). Compare framing to your `--camera-offset` experiments.
+
+### 8b — Environment `.blend` on its own
+
+Open the scene file directly. Your first `blenderproc run` log prints the Blender path, e.g.:
+
+```
+Using blender in C:\Users\...\blender-4.2.1-windows-x64\...
+```
+
+Launch that `blender.exe` with the environment file (adjust path from your log):
+
+```bash
+# Windows example
+& "<path-to-blender>\blender.exe" assets\environment\Scene_Morning.blend
+```
+
+```bash
+# macOS / Linux example
+"<path-to-blender>/blender" assets/environment/Scene_Morning.blend
+```
+
+In the viewport:
+
+1. Find the scene camera object — how does its angle differ from the demo camera?
+2. Navigate to roughly `[0, 3, 0]` on the ground — this is where the script places the tank pivot.
+3. **Shading** workspace on terrain: note how materials reference texture files under `assets/environment/Textures/`.
+
+### 8c — Tank mesh on its own
+
+Import the OBJ into a fresh Blender session (**File → Import → Wavefront (.obj)**) or open via CLI:
+
+```bash
+& "<path-to-blender>\blender.exe" --factory-startup assets\objects\tank\cn_ztz_99a\ztz_99a_0.obj
+```
+
+Check real-world scale (properties panel) and that DDS textures loaded on the materials. This is the asset your labels refer to — segmentation is mask-derived from this mesh in the render.
+
+**Worksheet:** Sketch or describe one thing you saw in Blender that the CLI log alone does not make obvious.
+
+---
+
+## Wrap-up
+
+1. What is *synthetic* about this data vs. a real photograph?
+2. What breaks if `--tank-location` Z is too low in the full environment?
+3. Would a model trained only on `lesson_02` generalize to `lesson_05`? What would you randomize across 1000 images?
+4. After Exercise 8 — how does inspecting the `.blend` change how you would set `--camera-offset` or `--env-rotation`?
 
 ---
 
 ## Worksheet template
 
-Copy this into `lesson/worksheet.md` and fill it in as you go:
-
-```markdown
-# SynthDataGen worksheet — [your name]
-
-## Exercise 1 paths
-- Tank: 
-- Environment: 
-- HDR: 
-- Script: 
-
-## Exercise 2
-- Resolution: 
-- Samples: 
-- Prediction (background): 
-- Actual result: 
-
-## Exercise 3
-- Raw label line: 
-- Box in pixels (x_min, y_min, x_max, y_max): 
-
-## Exercise 4
-- Run B Z value:  Effect: 
-- Run C X value:  Effect: 
-
-## Exercise 5
-- Offset A: 
-- Offset B: 
-- More top-down: 
-
-## Exercise 6
-- Two visual differences vs tank-only: 
-  1. 
-  2. 
-
-## Exercise 7
-- Parameter: 
-- Value: 
-- Observed change: 
-
-## Wrap-up
-1. 
-2. 
-3. 
-4. 
-```
+Copy `lesson/worksheet.example.md` → `lesson/worksheet.md`.
 
 ---
 
-## Quick reference (after you understand the lesson)
+## Quick reference
 
-| Task | Command shape |
-|------|----------------|
+| Task | Command |
+|------|---------|
 | Fast preview | `blenderproc run scripts/render_demo.py -- --tank-only --resolution 640 360 --samples 16` |
 | Full scene | `blenderproc run scripts/render_demo.py` |
-| Draw boxes | `python scripts/visualize_yolo.py <path-to-image.png>` |
+| Draw boxes | `python scripts/visualize_yolo.py <image.png>` |
 | Self-check | `python scripts/lesson_check.py --help` |
+| Blender GUI | `blenderproc debug scripts/render_demo.py -- <same flags as run>` |
 
-Full troubleshooting: `README.md` and `output/README.md`.
-
-Instructor notes and answer key: `lesson/INSTRUCTOR.md`.
+Troubleshooting: `README.md`, `output/README.md`. Instructor notes: `lesson/INSTRUCTOR.md`.
